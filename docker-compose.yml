@@ -1,0 +1,9 @@
+name: mvc_zaklad
+services:
+  web:
+    build: .
+    container_name: mvc_zaklad
+    ports:
+      - "8997:80"
+    volumes:
+      - ./:/var/www/html/

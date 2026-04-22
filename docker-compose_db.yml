@@ -1,0 +1,15 @@
+name: nazev_sluzby
+services:
+  web:
+    build: .
+    container_name: nazev_webu
+    ports:
+      - "8XXX:80"
+    volumes:
+      - ./:/var/www/html
+    networks:
+      - database-network
+
+networks:
+  database-network:
+    external: true
