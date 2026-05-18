@@ -4,6 +4,6 @@ services:
     build: .
     container_name: mvc_zaklad
     ports:
-      - "8997:80"
+      - "8050:80"
     volumes:
       - ./:/var/www/html/

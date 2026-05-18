@@ -2,6 +2,8 @@
 // Languages/en/home.php
 
 return [
+    'home.text' => 'This is home page',
+    'home.test' => 'This is home page',
     // Statistics
     'home.stats.years_count' => '25+ years',
     'home.stats.years_label' => 'on the market',

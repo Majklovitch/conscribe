@@ -23,6 +23,7 @@ namespace Modules\LanguageMutations\Core {
 
         public static function setLang($lang) {
             self::$currentLang = $lang;
+            self::$translations = [];
 
             if (!isset($_COOKIE['lang_preference']) || $_COOKIE['lang_preference'] !== $lang) {
                 setcookie('lang_preference', $lang, time() + (86400 * 30), "/");
@@ -90,7 +91,7 @@ namespace Modules\LanguageMutations\Core {
                         $transData = include $targetPath;
                         if (is_array($transData)) $data = array_merge($data, $transData);
                     }
-                    self::$translations = array_merge(self::$translations, $data);
+                    self::$translations = $data;
                     return true;
                 }
             }

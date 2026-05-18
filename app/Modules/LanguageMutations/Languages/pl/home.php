@@ -1,5 +1,7 @@
 <?php
 return [
+    'home.test' => 'To jest strona główna',
+
     // Statystyki
     'home.stats.years_count' => '25+ lat',
     'home.stats.years_label' => 'na rynku',

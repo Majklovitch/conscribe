@@ -1,0 +1,16 @@
+{
+    "name": "mbrotys/mvc_zaklad",
+    "description": "MVC PHP Project base",
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Majklovitch",
+            "email": "mbrotys@gmail.com"
+        }
+    ],
+    "require": {}
+}

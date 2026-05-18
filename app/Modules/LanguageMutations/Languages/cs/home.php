@@ -2,6 +2,8 @@
 // Languages/cs/home.php
 
 return [
+    'home.test' => 'Tohle je domovská stránka',
+
     // Statistiky
     'home.stats.years_count' => '25+ let',
     'home.stats.years_label' => 'na trhu',
