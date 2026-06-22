@@ -1,22 +1,26 @@
 <?php
-    $pageTitle = match (CURRENT_PAGE) {
+    $pageTitle = $pageTitle ?? match (CURRENT_PAGE) {
         'test' => 'Testovací stránka',
-        '' => 'Domovská stránka',
+        'home', '' => 'Domovská stránka',
         default => 'Stránka',
     };
     if(http_response_code() === 404) {
-        $pageTitle = 'Stránka nenalezena';
+        $pageTitle = $pageTitle ?? 'Stránka nenalezena';
     }
+    $pageDescription = $pageDescription ?? 'Základní webový MVC projekt v PHP.';
 ?>
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link type="text/css" rel="stylesheet" href="/css/style.css">
-    <script src="/js/main.js"></script>
-    <script src="/js/spotlight.bundle.js"></script>
-    <title><?= $pageTitle ?> | MVC_Projekt</title>
+    <meta name="description" content="<?= htmlspecialchars($pageDescription) ?>">
+    <link type="text/css" rel="stylesheet" href="/css/style.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'] . '/js/main.js') ?>">
+    <link type="text/css" rel="stylesheet" href="/css/cookieconsent.css">
+    <script src="/js/cookieconsent.umd.js" defer></script>
+    <script src="/js/main.js?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'] . '/js/main.js') ?>" defer></script>
+    <script src="/js/spotlight.bundle.js" defer></script>
+    <title><?= htmlspecialchars($pageTitle) ?> | MVC_Projekt</title>
 </head>
 <body>
 <header>
