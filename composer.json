@@ -12,5 +12,7 @@
             "email": "mbrotys@gmail.com"
         }
     ],
-    "require": {}
+    "require": {
+      "ext-mbstring": "*"
+    }
 }
