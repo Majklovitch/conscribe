@@ -28,7 +28,57 @@ img {
     display: block;
 }
 main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     max-width: 1400px;
     width: 98%;
-    margin: 0 auto;
+    margin: 2rem auto;
 }
+
+header {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+header p {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #1f2937;
+}
+
+nav ul {
+    display: flex;
+    gap: 1rem;
+    list-style: none;
+}
+
+nav a {
+    text-decoration: none;
+    color: #4b5563;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+nav a:hover {
+    color: #111827;
+    background-color: #f3f4f6;
+}
+
+nav a.active {
+    color: #2563eb;
+    background-color: #eff6ff;
+    font-weight: 600;
+}
+

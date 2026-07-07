@@ -1,6 +1,8 @@
 <?php
 namespace App\Core;
 
+use App\Models\MenuRepository;
+
 class Router {
 
     public function run(): void {
@@ -32,11 +34,7 @@ class Router {
             define('CURRENT_PAGE', $page);
         }
 
-        if($actionName == 'admin') {
-            $controllerClass = "App\\Controllers\\AdminController";
-        } else {
-            $controllerClass = "App\\Controllers\\WebController";
-        }
+        $controllerClass = "App\\Controllers\\WebController";
         if (class_exists($controllerClass)) {
             $controller = new $controllerClass();
 
@@ -55,6 +53,7 @@ class Router {
             'pageTitle' => "Error $code",
             'code' => (int) $code,
             'message' => (string) $message,
+            'menuItems' => (new MenuRepository())->all(),
         ];
 
         View::render('404', $data);

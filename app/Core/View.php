@@ -10,7 +10,6 @@ class View {
         if (!file_exists($viewFile)) {
             $viewFile = __DIR__ . '/../Views/404.php';
         }
-        require_once "../Helpers/TemplateHelper.php";
 
         ob_start();
         require $viewFile;

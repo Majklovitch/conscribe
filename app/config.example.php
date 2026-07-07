@@ -8,4 +8,11 @@ return [
         'pass'    => 'password',
         'charset' => 'utf8mb4',
     ],
+    'tracking' => [
+        'ga4_id'      => null, // Google Analytics 4 Measurement ID (e.g., 'G-XXXXXXXXXX')
+        'gtag_id'     => null, // Google Tag / Global Site Tag ID (e.g., 'GTA-XXXXXXXXXX')
+        'adwords_id'  => null, // Google Ads Conversion ID (e.g., 'AW-XXXXXXXXX')
+        'sklik_id'    => null, // Sklik Retargeting ID (e.g., '123456')
+        'fb_pixel_id' => null, // Facebook Pixel ID (e.g., '1234567890')
+    ],
 ];

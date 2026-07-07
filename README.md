@@ -4,6 +4,20 @@ A clean, modern, and lightweight PHP MVC (Model-View-Controller) boilerplate fra
 
 ---
 
+## Key Features
+
+- **Custom PHP MVC Core**: A clean, modular framework separation using namespaces, base classes, and autoloading logic.
+- **Dynamic Front-Routing**: Automatically translates URL paths into Controller actions with support for passing dynamic parameters.
+- **Secure Sessions**: Configured with strict session attributes (SameSite, HttpOnly, Secure cookie parameters).
+- **HTTP Security Headers**: Enforces strict security headers (e.g., Strict-Transport-Security, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy).
+- **Auto Cache-Busting (Assets)**: Features helper utilities that query file modification times (`filemtime`) to force browsers to reload modified CSS/JS.
+- **Modular Multi-Language Engine**: Support for localized routing, translation key mapping, URL slug mutation mapping, and automatic browser-language redirection.
+- **Inline SVG Wrapper**: Injects raw SVG icons inline while appending class names and ARIA properties dynamically.
+- **Reusable View Components**: Supports rendering lightweight, isolated component fragments with their own data scopes inside pages.
+- **Dockerized Environment**: Out-of-the-box support for Apache/PHP 8.2 with standard extensions (GD, Imagick, PDO MySQL, Zip, etc.).
+
+---
+
 ## Table of Contents
 1. [Project Structure](#project-structure)
 2. [Getting Started & Installation](#getting-started--installation)
@@ -14,8 +28,9 @@ A clean, modern, and lightweight PHP MVC (Model-View-Controller) boilerplate fra
    - [1. Passing Data from Controller](#1-passing-data-from-controller)
    - [2. View Extracting Data](#2-view-extracting-data)
    - [3. Displaying and Parsing in Views/Layouts](#3-displaying-and-parsing-in-viewslayouts)
-5. [Language Mutations & Translations](#language-mutations--translations)
-6. [Asset Caching](#asset-caching)
+5. [Template Utilities (`TemplateHelper`)](#template-utilities-templatehelper)
+6. [Language Mutations & Translations](#language-mutations--translations)
+7. [Asset Caching](#asset-caching)
 
 ---
 
@@ -31,6 +46,7 @@ A clean, modern, and lightweight PHP MVC (Model-View-Controller) boilerplate fra
 │   │   ├── Router.php           # Front-controller Router
 │   │   └── View.php             # View rendering engine
 │   ├── Helpers/                 # General helper files
+│   │   └── TemplateHelper.php   # Utility methods for layout & views
 │   ├── Models/                  # Data/Business logic models
 │   ├── Modules/                 # Modular extension components
 │   │   └── LanguageMutations/   # Multi-language translation & routing module
@@ -205,6 +221,63 @@ Extracted variables are also directly accessible in the specific page templates.
 
 ---
 
+## Template Utilities (`TemplateHelper`)
+
+The framework registers a layout helper class, `App\Helpers\TemplateHelper`, automatically loaded during view rendering. It offers several helper methods to render parts cleanly and format dynamic outputs safely.
+
+### 1. Escaping output: `TemplateHelper::esc()`
+Utility to trim and sanitize output fields (e.g., from databases or form fields) to prevent XSS.
+```php
+// Inside a view file:
+<p>User: <?= \App\Helpers\TemplateHelper::esc($username) ?></p>
+```
+
+### 2. Format Dates: `TemplateHelper::date()`
+Parses and converts a date string into a user-friendly format (defaults to Czech format `d. m. Y`).
+```php
+// Inside a view file:
+<span>Zveřejněno: <?= \App\Helpers\TemplateHelper::date($article['created_at']) ?></span>
+<!-- Output format: 22. 06. 2026 -->
+```
+
+### 3. Text Truncation: `TemplateHelper::truncate()`
+Safely cuts down long strings using multibyte string functions (`mb_substr`) without breaking characters, appending trailing dots.
+```php
+// Inside a view file:
+<p><?= \App\Helpers\TemplateHelper::truncate($article['content'], 120, '...') ?></p>
+```
+
+### 4. Cache-Busted Assets: `TemplateHelper::asset()`
+Builds query parameters with the file modification timestamp (`?v=17382...`) dynamically for caching.
+```php
+<!-- Inside header.php: -->
+<link rel="stylesheet" href="<?= \App\Helpers\TemplateHelper::asset('css/style.css') ?>">
+<!-- Outputs: href="/css/style.css?v=1738294821" -->
+```
+
+### 5. Shared Components Rendering: `TemplateHelper::component()`
+Loads isolated view sub-fragments located in `app/components/` and passes an associated array of data directly into the component scope.
+```php
+// Inside app/Views/home.php:
+<?php \App\Helpers\TemplateHelper::component('newsletter', ['buttonText' => 'Odebírat novinky']) ?>
+
+// Inside app/components/newsletter.php:
+<div class="newsletter-block">
+    <input type="email" placeholder="Email...">
+    <button><?= htmlspecialchars($buttonText) ?></button>
+</div>
+```
+
+### 6. Inline SVG Loader: `TemplateHelper::svg()`
+Retrieves raw file content of an SVG asset (stored in `public/img/icons/`) and embeds it inline within the HTML response. It automatically handles accessibility tags (`aria-hidden`) and custom CSS classes.
+```php
+// Inside a view file:
+<?= \App\Helpers\TemplateHelper::svg('check-circle', ['class' => 'icon-success', 'id' => 'first-check']) ?>
+<!-- Outputs full inline <svg class="icon-success" id="first-check" aria-hidden="true"> ... </svg> -->
+```
+
+---
+
 ## Language Mutations & Translations
 
 The project has multi-language capabilities located in `app/Modules/LanguageMutations`. 
@@ -219,9 +292,8 @@ The project has multi-language capabilities located in `app/Modules/LanguageMuta
 ---
 
 ## Asset Caching
-To prevent browser caching issues during style/script updates, the layout headers use file modification timestamps as query variables:
+To prevent browser caching issues during style/script updates, layout headers or static calls query file timestamps:
 ```html
-<link type="text/css" rel="stylesheet" href="/css/style.css?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'] . '/js/main.js') ?>">
-<script src="/js/main.js?v=<?= filemtime($_SERVER['DOCUMENT_ROOT'] . '/js/main.js') ?>" defer></script>
+<link type="text/css" rel="stylesheet" href="<?= \App\Helpers\TemplateHelper::asset('css/style.css') ?>">
 ```
 This forces browsers to download the fresh script or style sheet whenever changes are deployed.
