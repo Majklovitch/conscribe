@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'conscribe' => [
+        'ver' => '1.3.2',
+        'author' => 'Majklovitch'
+    ],
     'db' => [
         'host'    => 'host',
         'dbname'  => 'database_name',

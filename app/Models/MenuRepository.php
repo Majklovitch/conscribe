@@ -121,6 +121,10 @@ class MenuRepository {
      * @return bool
      */
     public function isLinkActive(string $link): bool {
+        if (str_starts_with($link, '/#') || str_starts_with($link, '#')) {
+            return false;
+        }
+
         $currentPage = defined('CURRENT_PAGE') ? CURRENT_PAGE : 'home';
 
         // Get current path from request URI
