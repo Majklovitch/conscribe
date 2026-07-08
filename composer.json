@@ -1,6 +1,6 @@
 {
-    "name": "mbrotys/mvc_zaklad",
-    "description": "MVC PHP Project base",
+    "name": "majklovitch/conscribe-php",
+    "description": "Conscribe MVC framework",
     "autoload": {
         "psr-4": {
             "App\\": "app/"

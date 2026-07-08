@@ -1,8 +1,8 @@
-name: mvc_zaklad
+name: conscribe-php
 services:
   web:
     build: .
-    container_name: mvc_zaklad
+    container_name: conscribe-php
     ports:
       - "8050:80"
     volumes:

@@ -1,14 +1,26 @@
 <?php
 
-namespace Modules\ContactSender\Controllers\ContactController;
+namespace Modules\ContactSender\Controllers;
 
 use Modules\ContactSender\Models\MailerModel;
 class ContactController {
     
     public function sendMail(): void{
-        $redirect_url = $_SERVER['HTTP_REFERER'] ?? '/';
+        // Validate redirect target: only allow same-host redirects to prevent open redirect
+        $redirect_url = '/';
+        $referer = $_SERVER['HTTP_REFERER'] ?? '';
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        if ($host !== '' && $referer !== '') {
+            $refererHost = parse_url($referer, PHP_URL_HOST) ?? '';
+            if ($refererHost === $host) {
+                $redirect_url = parse_url($referer, PHP_URL_PATH) ?? '/';
+            }
+        }
 
         if ($_SERVER["REQUEST_METHOD"] === "POST" && $_POST['form_id'] === 'contact_form') {
+            // CSRF validation must be the first check
+            check_csrf();
+
             $current_time = time();
             $load_time = $_SESSION['form_load_time'] ?? 0;
 

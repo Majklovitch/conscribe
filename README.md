@@ -1,6 +1,6 @@
-# PHP MVC Project Base (mvc_zaklad)
+# ConscribePHP
 
-A clean, modern, and lightweight PHP MVC (Model-View-Controller) boilerplate framework. It comes pre-configured with a custom router, basic view layout wrapping (header/footer templates), asset cache-busting, session security, multi-language support (routing & translations mapping), database config, built-in tracking code engine, CSRF security, and Docker setup.
+ConscribePHP is a clean, modern, and lightweight PHP MVC (Model-View-Controller) boilerplate framework. It comes pre-configured with a custom router, basic view layout wrapping (header/footer templates), asset cache-busting, session security, multi-language support (routing & translations mapping), database config, built-in tracking code engine, CSRF security, and Docker setup.
 
 ---
 

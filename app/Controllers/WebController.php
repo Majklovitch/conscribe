@@ -14,14 +14,14 @@ class WebController extends Controller {
     }
 
     public function index(): void {
-        $this->view('home', [
+        $this->render('home', [
             'pageTitle' => 'Domovská stránka',
             'pageDescription' => 'Vítejte na domovské stránce našeho skvělého MVC projektu.',
             'menuItems' => $this->menuItems,
         ]);
     }
     public function test(): void {
-        $this->view('test', [
+        $this->render('test', [
             'pageTitle' => 'Testovací stránka',
             'pageDescription' => 'Tato stránka slouží k otestování funkčnosti našeho MVC frameworku.',
             'menuItems' => $this->menuItems,

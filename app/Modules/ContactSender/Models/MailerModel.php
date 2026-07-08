@@ -16,11 +16,15 @@ class MailerModel {
     public function sendContactEmail(string $sender_email, string $subject, string $message_text): bool {
         $message_text = strip_tags($message_text);
 
+        // Prevent email header injection: remove any line-break characters from subject
+        $subject = str_replace(["\r", "\n", "\0"], '', $subject);
+
         $headers = "From: webserver@vasedomena.com\r\n";
         $headers .= "Reply-To: " . $sender_email . "\r\n";
         $headers .= "MIME-Version: 1.0\r\n";
         $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
 
-        return mail($this->to_email, $subject, $message_text, $headers);
+        // 5th parameter sets the envelope sender, preventing forged From headers
+        return mail($this->to_email, $subject, $message_text, $headers, '-f webserver@vasedomena.com');
     }
 }

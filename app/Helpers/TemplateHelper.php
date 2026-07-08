@@ -35,6 +35,24 @@ function svg(string $name, array $attrs = []): string {
     if ($svg === false) {
         return '';
     }
+
+    // --- SVG Sanitization ---
+    // Inline SVGs run in the page's JS context, so we must strip XSS vectors
+    // before output. This covers the most common attack vectors without needing
+    // an external library.
+
+    // 1. Remove <script> … </script> blocks (case-insensitive, multiline)
+    $svg = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $svg);
+
+    // 2. Remove <foreignObject> … </foreignObject> (allows arbitrary HTML injection)
+    $svg = preg_replace('/<foreignObject\b[^>]*>.*?<\/foreignObject>/is', '', $svg);
+
+    // 3. Strip on* event handler attributes (onclick, onload, onerror, etc.)
+    $svg = preg_replace('/\bon\w+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $svg);
+
+    // 4. Strip href / xlink:href / src with javascript: or data: URIs
+    $svg = preg_replace('/\b(?:href|xlink:href|src)\s*=\s*["\']?\s*(?:javascript|data):[^"\'>\s]*/i', '', $svg);
+
     if (!array_key_exists('aria-hidden', $attrs)) {
         $attrs['aria-hidden'] = 'true';
     }
