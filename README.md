@@ -100,7 +100,7 @@ If you run this project on a local stack (e.g., XAMPP, MAMP, or a native LAMP in
 2. Point your server's document root to the `public/` directory (not the project root).
 3. Copy `app/config.example.php` to `app/config.php` and configure your database credentials and tracking IDs:
    ```bash
-   cp app/config.example.php app/config.php
+   cp app/main.example.php app/config.php
    ```
 4. Run composer install:
    ```bash

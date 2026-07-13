@@ -4,7 +4,7 @@ namespace Modules\ContactSender\Models;
 
 class MailerModel {
     // Zadejte e-mail, na který chcete přijímat zprávy z kontaktního formuláře
-    private $to_email = "";
+    private $to_email = "admin@vasedomena.com";
 
     /**
      * Odešle e-mail.
@@ -18,9 +18,10 @@ class MailerModel {
 
         // Prevent email header injection: remove any line-break characters from subject
         $subject = str_replace(["\r", "\n", "\0"], '', $subject);
+        $sender_email_safe = str_replace(["\r", "\n", "\0"], '', $sender_email);
 
         $headers = "From: webserver@vasedomena.com\r\n";
-        $headers .= "Reply-To: " . $sender_email . "\r\n";
+        $headers .= "Reply-To: " . $sender_email_safe . "\r\n";
         $headers .= "MIME-Version: 1.0\r\n";
         $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
 

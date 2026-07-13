@@ -44,18 +44,8 @@ session_set_cookie_params([
 ]);
 
 session_start();
-
-// Error visibility: show errors only in development, never in production.
-// Set APP_ENV=development in your .env / server environment to enable.
-$appEnv = getenv('APP_ENV') ?: 'production';
-if ($appEnv === 'development') {
-    ini_set('display_errors', '1');
-    error_reporting(E_ALL);
-} else {
-    ini_set('display_errors', '0');
-    error_reporting(E_ALL); // still log everything, just don't show it
-    ini_set('log_errors', '1');
-}
+error_reporting(1);
+ini_set('display_errors', 1);
 
 require __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../app/Helpers/TemplateHelper.php';
@@ -91,4 +81,5 @@ Language::setLang($lang);
 Language::load($page);
 */
 $router = new Router();
+require_once __DIR__ . '/../app/Config/routes.php';
 $router->run();

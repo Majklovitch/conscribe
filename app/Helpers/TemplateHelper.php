@@ -3,6 +3,9 @@ function esc(string $string): string {
     return trim(htmlspecialchars($string, ENT_QUOTES));
 }
 
+/**
+ * @throws DateMalformedStringException
+ */
 function dateFormat(?string $date, string $format = 'd. m. Y'): string {
     if (!$date) return '';
     return (new DateTime($date))->format($format);
@@ -94,7 +97,7 @@ function renderTrackingCodes(): string {
     $configPath = dirname(__DIR__) . '/config.php';
     if (!file_exists($configPath)) {
         // Fallback to example configuration if the main config doesn't exist
-        $configPath = dirname(__DIR__) . '/config.example.php';
+        $configPath = dirname(__DIR__) . '/main.example.php';
     }
 
     if (!file_exists($configPath)) {
@@ -191,12 +194,11 @@ function csrf_token(): string {
     return $_SESSION['csrf_token'];
 }
 
-/**
- * Returns a hidden input HTML tag containing the CSRF token.
- * 
- * @return string HTML input element.
- */
 function csrf_field(): string {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $_SESSION['form_load_time'] = time();
     return '<input type="hidden" name="csrf_token" value="' . esc(csrf_token()) . '">';
 }
 
@@ -204,18 +206,23 @@ function csrf_field(): string {
  * Validates the request's CSRF token against the one stored in session.
  * Checks both POST data and HTTP headers (X-CSRF-TOKEN).
  * 
+ * @param \App\Core\Request|null $request The request object. If null, created from globals.
  * @return bool True if the token is valid, false otherwise.
  */
-function validate_csrf(): bool {
+function validate_csrf(?\App\Core\Request $request = null): bool {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
 
-    $token = $_POST['csrf_token'] ?? '';
+    if ($request === null) {
+        $request = \App\Core\Request::createFromGlobals();
+    }
+
+    $token = $request->post('csrf_token') ?? '';
 
     // Check header if not present in POST (useful for AJAX)
-    if (empty($token) && isset($_SERVER['HTTP_X_CSRF_TOKEN'])) {
-        $token = $_SERVER['HTTP_X_CSRF_TOKEN'];
+    if (empty($token)) {
+        $token = $request->getHeader('x-csrf-token') ?? '';
     }
 
     if (empty($_SESSION['csrf_token']) || empty($token)) {
@@ -228,13 +235,18 @@ function validate_csrf(): bool {
 /**
  * Aborts the request with a 403 Forbidden response if CSRF validation fails.
  * 
+ * @param \App\Core\Request|null $request The request object.
+ * @param \App\Core\Response|null $response The response object.
  * @return void
  */
-function check_csrf(): void {
-    if (!validate_csrf()) {
-        http_response_code(403);
-        echo "<h1>403 Forbidden</h1>";
-        echo "<p>CSRF token validation failed. Request blocked.</p>";
+function check_csrf(?\App\Core\Request $request = null, ?\App\Core\Response $response = null): void {
+    if (!validate_csrf($request)) {
+        if ($response === null) {
+            $response = new \App\Core\Response();
+        }
+        $response->setStatusCode(403);
+        $response->setContent("<h1>403 Forbidden</h1><p>CSRF token validation failed. Request blocked.</p>");
+        $response->send();
         exit;
     }
 }

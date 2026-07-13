@@ -11,7 +11,7 @@ class MenuRepository {
     public function __construct() {
         // Populate default menu items
         $this->add('Domů', '/');
-        $this->addSubmenu('Domů', 'Test', '/test');
+        $this->add("Test", '/test');
     }
 
     /**

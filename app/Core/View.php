@@ -2,7 +2,7 @@
 namespace App\Core;
 
 class View {
-    public static function render($viewPath, $data = [], $layout = 'main'): void {
+    public static function render($viewPath, $data = [], $layout = 'main'): string {
         extract($data);
 
         $viewFile = __DIR__ . '/../Views/' . $viewPath . '.php';
@@ -15,6 +15,7 @@ class View {
         require $viewFile;
         $content = ob_get_clean();
 
+        ob_start();
         $header = dirname(__DIR__, 1) . '/Views/layout/header.php';
         $footer = dirname(__DIR__, 1) . '/Views/layout/footer.php';
         if($layout == 'main') {
@@ -24,5 +25,6 @@ class View {
         if($layout == 'main') {
             require $footer;
         }
+        return ob_get_clean();
     }
 }

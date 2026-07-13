@@ -3,7 +3,13 @@
 return [
     'conscribe' => [
         'ver' => '1.3.2',
-        'author' => 'Majklovitch'
+        'author' => 'Majklovitch',
+        'environment' => 'development',
+        'base_url' => 'http://localhost:8080/',
+    ],
+    'contact_form' => [
+        'to_email' => 'test@testserver.com',
+        'from_email' => 'noreply@testserver.com',
     ],
     'db' => [
         'host'    => 'host',
