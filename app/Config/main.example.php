@@ -2,7 +2,7 @@
 
 return [
     'conscribe' => [
-        'ver' => '1.3.2',
+        'ver' => '1.3.3',
         'author' => 'Majklovitch',
         'environment' => 'development',
         'base_url' => 'http://localhost:8080/',

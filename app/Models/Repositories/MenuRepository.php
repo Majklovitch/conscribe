@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Repositories;
+
+use App\Models\MenuItem;
 
 class MenuRepository {
     /**

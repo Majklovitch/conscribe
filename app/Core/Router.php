@@ -1,10 +1,7 @@
 <?php
 namespace App\Core;
 
-use App\Core\View;
-use App\Core\Request;
-use App\Core\Response;
-use App\Models\MenuRepository;
+use App\Models\Repositories\MenuRepository;
 
 class Router {
 
