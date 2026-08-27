@@ -1,3 +1,7 @@
 /vendor/
 /app/Config/main.php
 /.idea/
+ABOUT.md
+/.claude/
+/public/media/cache/*
+!/public/media/cache/.htaccess

@@ -6,11 +6,11 @@ use App\Core\Http\Request;
 use App\Core\Http\Router;
 
 /**
- * Najde moduly v app/Modules/ a zapojí je do requestu.
+ * Finds the modules in app/Modules/ and hooks them into the request.
  *
- * Modul = složka se souborem Module.php obsahujícím třídu Modules\<Složka>\Module.
- * Seznam povolených modulů lze omezit klíčem 'modules' v app/Config/main.php;
- * bez něj jsou zapnuté všechny nalezené.
+ * A module = a directory with a Module.php file holding the class
+ * Modules\<Directory>\Module. The list of enabled modules can be narrowed with
+ * the 'modules' key in app/Config/main.php; without it, everything found is on.
  */
 class ModuleManager {
     private string $modulesPath;
@@ -25,8 +25,6 @@ class ModuleManager {
     }
 
     /**
-     * Načte a instancuje povolené moduly.
-     *
      * @return ModuleInterface[]
      */
     public function modules(): array {
@@ -76,8 +74,8 @@ class ModuleManager {
     }
 
     /**
-     * Načte helpery modulů a nechá je zpracovat request.
-     * Vrací případně upravený request.
+     * Loads the module helpers and lets the modules process the request.
+     * Returns the request, possibly modified.
      */
     public function boot(Request $request): Request {
         foreach ($this->modules() as $module) {
@@ -92,9 +90,6 @@ class ModuleManager {
         return $request;
     }
 
-    /**
-     * Nechá moduly zaregistrovat vlastní trasy.
-     */
     public function registerRoutes(Router $router): void {
         foreach ($this->modules() as $module) {
             $module->registerRoutes($router);
@@ -102,8 +97,6 @@ class ModuleManager {
     }
 
     /**
-     * Názvy zapojených modulů.
-     *
      * @return string[]
      */
     public function names(): array {

@@ -8,57 +8,55 @@ use ReflectionNamedType;
 
 class Router {
 
-    /**
-     * Pole pro ukládání registrovaných tras rozdělené podle HTTP metod.
-     */
     private array $routes = [
         'GET'  => [],
         'POST' => [],
     ];
 
     /**
-     * Obsluha chybových stavů: fn(int $code, string $message, Request $request): Response
+     * Error handler: fn(int $code, string $message, Request $request): Response
      *
      * @var callable|null
      */
     private $errorHandler = null;
 
     /**
-     * Registrace GET trasy
+     * Session passed on to controllers. Without an argument the shared instance
+     * is used, so that a plain new Router() keeps working.
      */
+    private Session $session;
+
+    public function __construct(?Session $session = null) {
+        $this->session = $session ?? Session::instance();
+    }
+
     public function get(string $url, array $handler): void {
         $this->addRoute('GET', $url, $handler);
     }
 
-    /**
-     * Registrace POST trasy
-     */
     public function post(string $url, array $handler): void {
         $this->addRoute('POST', $url, $handler);
     }
 
     /**
-     * Nastaví vlastní vykreslení chybových stránek.
-     * Jádro nesmí vědět nic o modelech aplikace, proto si obsluhu registruje
-     * aplikace sama (viz app/Config/routes.php).
+     * Sets a custom renderer for error pages.
+     * The core must know nothing about application models, so the application
+     * registers the handler itself at bootstrap (see public/index.php).
      */
     public function setErrorHandler(callable $handler): void {
         $this->errorHandler = $handler;
     }
 
-    /**
-     * Interní metoda, která převede uživatelskou URL na regulární výraz a uloží ji.
-     */
     private function addRoute(string $method, string $url, array $handler): void {
         if (!isset($handler[0], $handler[1]) || !is_string($handler[0]) || !is_string($handler[1])) {
             throw new \InvalidArgumentException("Route '{$url}' must be registered as [ControllerClass::class, 'method'].");
         }
 
-        // Nejdřív normalizujeme URL, teprve pak z ní stavíme regulární výraz –
-        // trimovat až hotový vzor by rozbilo výrazy končící lomítkem.
+        // Normalize the URL first and only then build the regex from it -
+        // trimming the finished pattern would break expressions ending in a slash.
         $url = trim($url, '/');
 
-        // Převede zápis typu 'clanek/{slug}' na regulární výraz 'clanek/(?P<slug>[^/]+)'
+        // 'clanek/{slug}' => 'clanek/(?P<slug>[^/]+)'
         $pattern = preg_replace('/\{([a-zA-Z0-9_]+)\}/', '(?P<$1>[^/]+)', $url);
 
         $this->routes[strtoupper($method)][] = [
@@ -68,49 +66,47 @@ class Router {
         ];
     }
 
-    /**
-     * Hlavní metoda pro spuštění routeru a odbavení požadavku.
-     */
     public function run(?Request $request = null): void {
         $request ??= Request::createFromGlobals();
 
         $response = $this->handle($request);
 
-        // HEAD má stejné hlavičky jako GET, ale nesmí mít tělo.
+        // HEAD has the same headers as GET, but must not have a body.
         $response->send(!$request->isHead());
     }
 
     /**
-     * Zpracuje požadavek a vrátí odpověď (bez odeslání) – takto je routování testovatelné.
+     * Handles the request and returns the response without sending it -
+     * this is what makes routing testable.
      */
     public function handle(Request $request): Response {
         $uri = $request->getPath();
         $method = $request->getMethod();
 
-        // Definice CURRENT_PAGE pro zachování zpětné kompatibility se šablonami a menu.
+        // CURRENT_PAGE is defined for backwards compatibility with templates and the menu.
         if (!defined('CURRENT_PAGE')) {
             define('CURRENT_PAGE', $request->getFirstSegment());
         }
 
-        // Statické soubory sem nikdy patřit nemají (řeší je webserver),
-        // takže je odbavíme rovnou, bez vykreslování šablon.
+        // Static files never belong here (the web server handles them),
+        // so answer them right away without rendering any template.
         if (preg_match('/\.(?:css|js|png|jpg|jpeg|gif|svg|webp|ico|woff2?)$/i', $uri)) {
             return new Response('File was not found.', 404, ['Content-Type' => 'text/plain; charset=utf-8']);
         }
 
-        // HEAD se routuje podle GET tabulky.
+        // HEAD is routed through the GET table.
         $lookupMethod = $method === 'HEAD' ? 'GET' : $method;
 
         foreach ($this->routes[$lookupMethod] ?? [] as $route) {
             if (preg_match($route['pattern'], $uri, $matches)) {
-                // Vytáhneme pouze pojmenované parametry (odfiltrujeme číselné indexy z preg_match)
+                // Named parameters only; the numeric indexes from preg_match are dropped.
                 $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
 
                 return $this->execute($route['controller'], $route['action'], $params, $request);
             }
         }
 
-        // Cesta existuje, jen pod jinou metodou => 405 místo 404.
+        // The path exists, just under a different method => 405 instead of 404.
         $allowed = $this->allowedMethodsFor($uri, $lookupMethod);
         if ($allowed !== []) {
             return $this->error(405, 'Method not allowed.', $request)
@@ -121,7 +117,7 @@ class Router {
     }
 
     /**
-     * Metody, pod kterými je daná cesta registrovaná (kromě té právě zkoušené).
+     * Methods the given path is registered under, excluding the one just tried.
      *
      * @return string[]
      */
@@ -147,9 +143,6 @@ class Router {
         return $allowed;
     }
 
-    /**
-     * Bezpečné instancování controlleru a zavolání metody.
-     */
     private function execute(string $controllerClass, string $actionName, array $params, Request $request): Response {
         if (!class_exists($controllerClass)) {
             return $this->error(500, "Controller {$controllerClass} not found.", $request);
@@ -159,8 +152,11 @@ class Router {
         if (method_exists($controller, 'setRequest')) {
             $controller->setRequest($request);
         }
+        if (method_exists($controller, 'setSession')) {
+            $controller->setSession($this->session);
+        }
 
-        // Reflexní kontrola: zajištění, že metoda je veřejná a patří přímo danému controlleru
+        // Only a public method declared directly on this controller may be called.
         try {
             $ref = new ReflectionMethod($controller, $actionName);
             if (!$ref->isPublic() || $ref->getDeclaringClass()->getName() !== get_class($controller)) {
@@ -172,7 +168,8 @@ class Router {
 
         $args = $this->buildArguments($ref, $params, $request);
         if ($args === null) {
-            // Parametr z URL nejde naplnit (chybí, nebo nesedí typ) – trasa tedy neodpovídá.
+            // A URL parameter cannot be filled (missing, or the type does not fit),
+            // so the route does not actually match.
             return $this->error(404, 'Page not found.', $request);
         }
 
@@ -190,12 +187,24 @@ class Router {
             return Response::html($result);
         }
 
-        return new Response();
+        // A silent empty 200 would turn a missing 'return' into a blank page that
+        // nothing reports. Better a 500, so it shows up in the log.
+        return $this->error(
+            500,
+            sprintf(
+                'Action %s::%s must return a Response or string, got %s.',
+                $controllerClass,
+                $actionName,
+                get_debug_type($result)
+            ),
+            $request
+        );
     }
 
     /**
-     * Sestaví argumenty akce podle reflexe. Vrací null, pokud povinný parametr nelze naplnit –
-     * dřívější doplňování null by na typovaném parametru skončilo TypeError.
+     * Builds the action arguments via reflection. Returns null when a required
+     * parameter cannot be filled - passing null instead, as before, would end in
+     * a TypeError on a typed parameter.
      *
      * @return array<int, mixed>|null
      */
@@ -209,6 +218,11 @@ class Router {
 
             if ($typeName !== null && ($typeName === Request::class || is_subclass_of($typeName, Request::class))) {
                 $args[] = $request;
+                continue;
+            }
+
+            if ($typeName !== null && ($typeName === Session::class || is_subclass_of($typeName, Session::class))) {
+                $args[] = $this->session;
                 continue;
             }
 
@@ -238,8 +252,8 @@ class Router {
     }
 
     /**
-     * Přetypuje hodnotu z URL podle deklarovaného typu parametru.
-     * Netypované a string parametry zůstávají řetězcem, aby se '007' nezměnilo na 7.
+     * Casts a value from the URL to the declared parameter type.
+     * Untyped and string parameters stay strings, so that '007' does not become 7.
      */
     private function castParam(string $value, ?string $typeName): mixed {
         return match ($typeName) {
@@ -251,8 +265,8 @@ class Router {
     }
 
     /**
-     * Vytvoření chybové odpovědi. Bez registrované obsluhy vrací prostý text,
-     * aby jádro fungovalo i bez šablon aplikace.
+     * Builds an error response. With no handler registered it returns plain text,
+     * so the core works even without the application templates.
      */
     private function error(int $code, string $message, Request $request): Response {
         if ($this->errorHandler !== null) {

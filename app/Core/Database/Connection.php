@@ -5,9 +5,6 @@ use App\Core\Config;
 use PDO;
 use RuntimeException;
 
-/**
- * Drží jedno PDO připojení pro celý request a stará se o jeho vytvoření z konfigurace.
- */
 class Connection {
     private static ?PDO $pdo = null;
 
@@ -17,11 +14,6 @@ class Connection {
         PDO::ATTR_EMULATE_PREPARES   => false,
     ];
 
-    /**
-     * Vrátí připojení; při prvním volání ho vytvoří podle app/Config/main.php.
-     *
-     * @throws RuntimeException pokud konfigurace chybí nebo je neúplná
-     */
     public static function get(): PDO {
         if (self::$pdo === null) {
             self::$pdo = self::create();
@@ -30,16 +22,10 @@ class Connection {
         return self::$pdo;
     }
 
-    /**
-     * Nastaví (nebo zahodí) připojení – používá se v testech, např. pro SQLite v paměti.
-     */
     public static function set(?PDO $pdo): void {
         self::$pdo = $pdo;
     }
 
-    /**
-     * Bylo připojení už navázáno?
-     */
     public static function isConnected(): bool {
         return self::$pdo !== null;
     }

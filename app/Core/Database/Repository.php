@@ -8,19 +8,16 @@ use PDOStatement;
 use RuntimeException;
 
 /**
- * Základ pro přístup k jedné tabulce.
+ * Base for accessing a single table.
  *
- * Potomek nastaví $table a volitelně $model – pak se výsledky vrací
- * jako instance modelu místo holých polí.
+ * A subclass sets $table and optionally $model - results are then returned
+ * as model instances instead of bare arrays.
  */
 abstract class Repository {
-    /**
-     * Název tabulky.
-     */
     protected string $table = '';
 
     /**
-     * Třída modelu pro hydrataci výsledků; prázdné = vracet pole.
+     * Model class used to hydrate results; empty = return arrays.
      *
      * @var class-string<Model>|string
      */
@@ -31,21 +28,22 @@ abstract class Repository {
     private ?PDO $db = null;
 
     /**
-     * Připojení se předává jen v testech; jinak se bere z Connection až při první dotazu.
+     * The connection is only injected in tests; otherwise it is taken from
+     * Connection on the first query.
      */
     public function __construct(?PDO $db = null) {
         $this->db = $db;
     }
 
     /**
-     * Připojení k databázi (lazy – repozitář bez dotazu se nikam nepřipojuje).
+     * Database connection (lazy - a repository with no query connects nowhere).
      */
     protected function db(): PDO {
         return $this->db ??= Connection::get();
     }
 
     /**
-     * Název tabulky s kontrolou, aby se nedal propašovat do SQL.
+     * Table name, validated so that nothing can be smuggled into the SQL.
      */
     protected function table(): string {
         if ($this->table === '') {
@@ -56,7 +54,7 @@ abstract class Repository {
     }
 
     /**
-     * Identifikátory nelze bindovat, takže je držíme na whitelistu znaků.
+     * Identifiers cannot be bound, so we hold them to a character whitelist.
      */
     protected function quoteIdentifier(string $name): string {
         if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
@@ -66,9 +64,6 @@ abstract class Repository {
         return '`' . $name . '`';
     }
 
-    /**
-     * Převede řádek na model, pokud je nastavený.
-     */
     protected function hydrate(array $row): Model|array {
         if ($this->model === '') {
             return $row;
@@ -93,8 +88,7 @@ abstract class Repository {
     }
 
     /**
-     * Sestaví WHERE klauzuli z pole sloupec => hodnota.
-     *
+     * @param array<string, mixed> $conditions column => value
      * @return array{0: string, 1: array<int, mixed>}
      */
     protected function buildWhere(array $conditions): array {
@@ -119,7 +113,7 @@ abstract class Repository {
     }
 
     /**
-     * Sestaví ORDER BY z pole sloupec => ASC|DESC.
+     * @param array<string, string> $order column => ASC|DESC
      */
     protected function buildOrderBy(array $order): string {
         if ($order === []) {
@@ -135,9 +129,6 @@ abstract class Repository {
         return ' ORDER BY ' . implode(', ', $parts);
     }
 
-    /**
-     * Spustí dotaz s parametry.
-     */
     protected function run(string $sql, array $bindings = []): PDOStatement {
         $statement = $this->db()->prepare($sql);
         $statement->execute($bindings);
@@ -145,18 +136,12 @@ abstract class Repository {
         return $statement;
     }
 
-    /**
-     * Najde záznam podle primárního klíče.
-     */
     public function find(mixed $id): Model|array|null {
         $row = $this->findRaw($id);
 
         return $row === null ? null : $this->hydrate($row);
     }
 
-    /**
-     * Najde záznam podle primárního klíče jako pole.
-     */
     public function findRaw(mixed $id): ?array {
         $sql = 'SELECT * FROM ' . $this->table()
             . ' WHERE ' . $this->quoteIdentifier($this->primaryKey) . ' = ? LIMIT 1';
@@ -167,24 +152,17 @@ abstract class Repository {
     }
 
     /**
-     * Vrátí všechny záznamy.
-     *
      * @return array<int, Model|array>
      */
     public function all(array $order = []): array {
         return $this->hydrateAll($this->allRaw($order));
     }
 
-    /**
-     * Vrátí všechny záznamy jako pole.
-     */
     public function allRaw(array $order = []): array {
         return $this->run('SELECT * FROM ' . $this->table() . $this->buildOrderBy($order))->fetchAll();
     }
 
     /**
-     * Vrátí záznamy odpovídající podmínkám.
-     *
      * @return array<int, Model|array>
      */
     public function where(array $conditions, array $order = [], ?int $limit = null, int $offset = 0): array {
@@ -199,16 +177,10 @@ abstract class Repository {
         return $this->hydrateAll($this->run($sql, $bindings)->fetchAll());
     }
 
-    /**
-     * První záznam odpovídající podmínkám.
-     */
     public function first(array $conditions, array $order = []): Model|array|null {
         return $this->where($conditions, $order, 1)[0] ?? null;
     }
 
-    /**
-     * Počet záznamů (volitelně s podmínkami).
-     */
     public function count(array $conditions = []): int {
         [$whereSql, $bindings] = $this->buildWhere($conditions);
 
@@ -216,8 +188,6 @@ abstract class Repository {
     }
 
     /**
-     * Stránkování. Vrací data i metadata pro vykreslení stránkovače.
-     *
      * @return array{data: array<int, Model|array>, page: int, perPage: int, total: int, pages: int}
      */
     public function paginate(int $page = 1, int $perPage = 20, array $conditions = [], array $order = []): array {
@@ -235,7 +205,7 @@ abstract class Repository {
     }
 
     /**
-     * Vloží záznam a vrátí jeho ID.
+     * @return string ID of the inserted record
      */
     public function insert(array $data): string {
         if ($data === []) {
@@ -254,7 +224,7 @@ abstract class Repository {
     }
 
     /**
-     * Upraví záznam podle primárního klíče. Vrací počet dotčených řádků.
+     * @return int number of affected rows
      */
     public function update(mixed $id, array $data): int {
         if ($data === []) {
@@ -276,7 +246,7 @@ abstract class Repository {
     }
 
     /**
-     * Smaže záznam podle primárního klíče. Vrací počet dotčených řádků.
+     * @return int number of affected rows
      */
     public function delete(mixed $id): int {
         $sql = 'DELETE FROM ' . $this->table()

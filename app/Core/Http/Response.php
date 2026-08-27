@@ -6,29 +6,21 @@ use App\Core\Config;
 use InvalidArgumentException;
 use JsonException;
 
-/**
- * Class Response
- * Represents an HTTP Response.
- */
 class Response
 {
     private string $content;
     private int $statusCode;
 
     /**
-     * Hlavičky v kanonickém tvaru názvu => pole hodnot.
+     * Headers as canonical name => array of values.
      */
     private array $headers = [];
 
     /**
-     * Cookies k odeslání: název => ['value' => string, 'options' => array].
+     * Cookies to send: name => ['value' => string, 'options' => array].
      */
     private array $cookies = [];
 
-    /**
-     * Response constructor.
-     * Normalizes input headers to array format (Header-Name => [value1, value2, ...])
-     */
     public function __construct(string $content = '', int $statusCode = 200, array $headers = [])
     {
         $this->content = $content;
@@ -42,8 +34,9 @@ class Response
     }
 
     /**
-     * Převede název hlavičky na kanonický tvar (content-type => Content-Type),
-     * aby stejná hlavička nešla odeslat dvakrát jen kvůli jinému zápisu.
+     * Converts a header name to its canonical form (content-type => Content-Type),
+     * so the same header cannot be sent twice merely because it was spelled
+     * differently.
      */
     private static function normalizeHeaderName(string $name): string
     {
@@ -56,41 +49,29 @@ class Response
     }
 
     /**
-     * Odstraní znaky umožňující HTTP response splitting.
+     * Strips the characters that would allow HTTP response splitting.
      */
     private static function sanitizeHeaderValue(string $value): string
     {
         return trim(str_replace(["\r", "\n", "\0"], '', $value));
     }
 
-    /**
-     * Gets the response body content.
-     */
     public function getContent(): string
     {
         return $this->content;
     }
 
-    /**
-     * Sets the response body content.
-     */
     public function setContent(string $content): self
     {
         $this->content = $content;
         return $this;
     }
 
-    /**
-     * Gets the HTTP status code.
-     */
     public function getStatusCode(): int
     {
         return $this->statusCode;
     }
 
-    /**
-     * Sets the HTTP status code.
-     */
     public function setStatusCode(int $statusCode): self
     {
         $this->statusCode = $statusCode;
@@ -98,7 +79,7 @@ class Response
     }
 
     /**
-     * Gets all headers as an associative array where values are string arrays.
+     * @return array<string, string[]>
      */
     public function getHeaders(): array
     {
@@ -106,7 +87,7 @@ class Response
     }
 
     /**
-     * Vrátí první hodnotu hlavičky (case-insensitive).
+     * Returns the first value of a header (case-insensitive).
      */
     public function getHeader(string $name): ?string
     {
@@ -114,7 +95,7 @@ class Response
     }
 
     /**
-     * Sets an HTTP header, completely replacing existing values for this header.
+     * Sets a header, discarding any values it already had.
      */
     public function setHeader(string $name, string $value): self
     {
@@ -123,7 +104,7 @@ class Response
     }
 
     /**
-     * Appends a value to an HTTP header.
+     * Appends another value to an existing header.
      */
     public function addHeader(string $name, string $value): self
     {
@@ -131,9 +112,6 @@ class Response
         return $this;
     }
 
-    /**
-     * Removes an HTTP header.
-     */
     public function removeHeader(string $name): self
     {
         unset($this->headers[self::normalizeHeaderName($name)]);
@@ -141,7 +119,7 @@ class Response
     }
 
     /**
-     * Přidá cookie, která se odešle spolu s odpovědí.
+     * Adds a cookie to be sent along with the response.
      */
     public function withCookie(string $name, string $value, array $options = []): self
     {
@@ -158,9 +136,6 @@ class Response
         return $this;
     }
 
-    /**
-     * Factory method for generating an HTML Response.
-     */
     public static function html(string $content, int $statusCode = 200, array $headers = []): self
     {
         $headers['Content-Type'] = 'text/html; charset=utf-8';
@@ -168,7 +143,7 @@ class Response
     }
 
     /**
-     * Odpověď bez těla.
+     * A response with no body.
      */
     public static function noContent(int $statusCode = 204, array $headers = []): self
     {
@@ -176,9 +151,7 @@ class Response
     }
 
     /**
-     * Factory method for generating a JSON Response.
-     *
-     * @throws JsonException pokud data nelze zakódovat
+     * @throws JsonException when the data cannot be encoded
      */
     public static function json(mixed $data, int $statusCode = 200, array $headers = []): self
     {
@@ -192,9 +165,8 @@ class Response
     }
 
     /**
-     * Factory method for generating a Redirect Response.
-     * Cíl musí být lokální cesta nebo adresa na stejné doméně jako conscribe.base_url,
-     * jinak by šlo o open redirect.
+     * The target must be a local path or an address on the same domain as
+     * conscribe.base_url, otherwise this would be an open redirect.
      *
      * @throws InvalidArgumentException
      */
@@ -205,7 +177,7 @@ class Response
     }
 
     /**
-     * Ověří a znormalizuje cíl přesměrování.
+     * Validates and normalizes the redirect target.
      *
      * @throws InvalidArgumentException
      */
@@ -217,7 +189,7 @@ class Response
             throw new InvalidArgumentException('Redirect URL must not be empty.');
         }
 
-        // Absolutní URL: povolena jen stejná doména jako base_url.
+        // Absolute URL: only the same domain as base_url is allowed.
         if (preg_match('#^[a-z][a-z0-9+.\-]*:#i', $url)) {
             $host = parse_url($url, PHP_URL_HOST);
             $baseUrl = (string) Config::get('conscribe.base_url', '');
@@ -230,7 +202,7 @@ class Response
             return $url;
         }
 
-        // Protokolově relativní ('//evil.com') i '/\evil.com' vedou mimo web.
+        // Protocol-relative ('//evil.com') and '/\evil.com' both lead off-site.
         if (str_starts_with($url, '//') || str_starts_with($url, '/\\')) {
             throw new InvalidArgumentException("Refusing to redirect to external URL '{$url}'.");
         }
@@ -239,7 +211,7 @@ class Response
     }
 
     /**
-     * Stavové kódy, které podle RFC 9110 nesmí mít tělo.
+     * Status codes that must not have a body under RFC 9110.
      */
     private function isBodyless(): bool
     {
@@ -249,9 +221,7 @@ class Response
     }
 
     /**
-     * Sends the HTTP response headers and body content to the browser.
-     *
-     * @param bool $includeBody false pro HEAD requesty
+     * @param bool $includeBody false for HEAD requests
      */
     public function send(bool $includeBody = true): void
     {
@@ -262,10 +232,8 @@ class Response
             return;
         }
 
-        // Send HTTP Status Code
         http_response_code($this->statusCode);
 
-        // Send HTTP Headers
         foreach ($this->headers as $name => $values) {
             $first = true;
             foreach ($values as $value) {
@@ -274,7 +242,6 @@ class Response
             }
         }
 
-        // Send cookies
         foreach ($this->cookies as $name => $cookie) {
             setcookie($name, $cookie['value'], $cookie['options']);
         }

@@ -6,12 +6,9 @@ use App\Core\Http\Router;
 use ReflectionClass;
 
 /**
- * Výchozí implementace modulu – potomek přepíše jen to, co skutečně potřebuje.
+ * Default module implementation - a subclass overrides only what it really needs.
  */
 abstract class Module implements ModuleInterface {
-    /**
-     * Adresář, ve kterém modul leží.
-     */
     public function path(): string {
         return dirname((new ReflectionClass(static::class))->getFileName());
     }

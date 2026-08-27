@@ -1,4 +1,3 @@
-// Inicializace Cookie Consent v3
 CookieConsent.run({
     guiOptions: {
         consentModal: {
@@ -25,34 +24,34 @@ CookieConsent.run({
         translations: {
             en: {
                 consentModal: {
-                    title: "Nastavení soukromí",
-                    description: "Používáme cookies, abychom vám zajistili co nejlepší zážitek. Některé jsou nezbytné, jiné nám pomáhají zlepšovat náš web. ",
+                    title: "Privacy settings",
+                    description: "We use cookies to give you the best possible experience. Some are essential, others help us improve the site. ",
                     closeIconLabel: "",
-                    acceptAllBtn: "Příjmout vše",
-                    acceptNecessaryBtn: "Odmítnout vše",
-                    showPreferencesBtn: "Nastavení",
+                    acceptAllBtn: "Accept all",
+                    acceptNecessaryBtn: "Reject all",
+                    showPreferencesBtn: "Preferences",
                     footer: ""
                 },
                 preferencesModal: {
-                    title: "Nastavení soukromí",
-                    closeIconLabel: "Zavřít okno",
-                    acceptAllBtn: "Příjmout vše",
-                    acceptNecessaryBtn: "Odmítnout vše",
-                    savePreferencesBtn: "Uložit nastavení",
+                    title: "Privacy settings",
+                    closeIconLabel: "Close dialog",
+                    acceptAllBtn: "Accept all",
+                    acceptNecessaryBtn: "Reject all",
+                    savePreferencesBtn: "Save preferences",
                     serviceCounterLabel: "Service|Services",
                     sections: [
                         {
                             title: "",
-                            description: "Vyberte, které soubory cookies můžeme používat. Technické a bezpečnostní cookies (např. ochrana proti spamu) jsou nezbytné pro správné fungování webu."
+                            description: "Choose which cookies we may use. Technical and security cookies (e.g. spam protection) are required for the site to work correctly."
                         },
                         {
-                            title: "Nezbytné & Bezpečnostní<span class=\"pm__badge\">Vždy zapnuté</span>",
-                            description: "Nutné pro funkčnost webu a ochranu formuláře před spamem (reCAPTCHA).",
+                            title: "Essential & security<span class=\"pm__badge\">Always on</span>",
+                            description: "Required for the site to function and to protect forms from spam (reCAPTCHA).",
                             linkedCategory: "necessary"
                         },
                         {
-                            title: "Analytické",
-                            description: "Pomáhají nám vylepšovat web měřením návštěvnosti.",
+                            title: "Analytics",
+                            description: "They help us improve the site by measuring traffic.",
                             linkedCategory: "analytics"
                         }
                     ]
@@ -60,4 +59,31 @@ CookieConsent.run({
             }
         }
     }
+});
+
+// --- Mobile navigation ------------------------------------------------------
+// The header is collapsed on small screens; the button only toggles a class,
+// so the state stays readable for screen readers too (aria-expanded).
+document.addEventListener('DOMContentLoaded', function () {
+    var toggle = document.querySelector('[data-nav-toggle]');
+    var nav = document.getElementById('site-nav');
+
+    if (toggle && nav) {
+        toggle.addEventListener('click', function () {
+            var open = nav.classList.toggle('is-open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+
+    // The "Back" button on the error page. When the visitor arrived directly
+    // (empty history), send them to the home page instead.
+    document.querySelectorAll('[data-history-back]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '/';
+            }
+        });
+    });
 });

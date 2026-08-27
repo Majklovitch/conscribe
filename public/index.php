@@ -1,9 +1,13 @@
 <?php
 require __DIR__ . '/../vendor/autoload.php';
 
+use App\Controllers\ErrorController;
 use App\Core\Config;
 use App\Core\Http\Request;
+use App\Core\Http\Response;
 use App\Core\Http\Router;
+use App\Core\Http\Session;
+use App\Core\Logging\ErrorHandler;
 use App\Core\Module\ModuleManager;
 
 $isSecure = Request::isSecure();
@@ -14,23 +18,18 @@ ini_set('display_errors', $isDevelopment ? '1' : '0');
 ini_set('display_startup_errors', $isDevelopment ? '1' : '0');
 ini_set('log_errors', '1');
 
-// --- Session ---------------------------------------------------------------
-ini_set('session.use_only_cookies', '1');
-ini_set('session.use_strict_mode', '1');
-ini_set('session.use_trans_sid', '0');
+// Both the error page and the logger are built only once something fails.
+// Nothing is logged on a successful request, so there is no reason to pull in
+// Monolog - and constructing ErrorController also reaches into the database
+// for the menu.
+$errorPage = static function (int $code, string $message, Request $request): Response {
+    static $controller = null;
+    $controller ??= new ErrorController();
 
-session_set_cookie_params([
-    'lifetime' => 0,
-    'path'     => '/',
-    'domain'   => '',
-    'secure'   => $isSecure,
-    'httponly' => true,
-    'samesite' => 'Lax',
-]);
+    return $controller($code, $message, $request);
+};
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+ErrorHandler::register($isDevelopment, $errorPage);
 
 if (!headers_sent()) {
     if ($isSecure) {
@@ -42,8 +41,12 @@ if (!headers_sent()) {
     header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
 }
 
+$session = Session::instance();
+
 $request = Request::createFromGlobals();
-$router = new Router();
+$router = new Router($session);
+
+$router->setErrorHandler($errorPage);
 
 $modules = new ModuleManager();
 $request = $modules->boot($request);

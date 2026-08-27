@@ -1,10 +1,11 @@
 <?php
 
 use App\Core\Config;
+use App\Core\Http\Session;
 
 /**
- * Escapuje hodnotu pro vložení do HTML.
- * Přijímá i null a čísla, protože v šablonách jde typicky o volitelná data.
+ * Escapes a value for insertion into HTML.
+ * Accepts null and numbers too, because template data is typically optional.
  */
 function esc(mixed $value): string {
     if ($value === null || is_array($value) || (is_object($value) && !$value instanceof Stringable)) {
@@ -38,8 +39,8 @@ function component(string $name, array $data = []): void {
 }
 
 /**
- * Odkaz na statický soubor s cache busterem odvozeným z času změny souboru.
- * Cesta se hledá v public/, nezávisle na aktuálním pracovním adresáři.
+ * Link to a static file with a cache buster derived from its modification time.
+ * The path is resolved inside public/, regardless of the working directory.
  */
 function asset(string $path): string {
     $relative = ltrim($path, '/');
@@ -48,6 +49,78 @@ function asset(string $path): string {
 
     return '/' . $relative . '?v=' . $version;
 }
+/**
+ * Link to a resized variant of an image in public/. The file is generated on
+ * the first render and afterwards merely served from the cache directory.
+ *
+ *   image('img/photo.jpg', 1200, 500)   => /media/cache/1200x500/img/photo.jpg.webp
+ *   image('img/photo.jpg', 'thumb')     => dimensions from the media.presets config
+ *
+ * When the variant cannot be produced (no library, missing file), the original
+ * is returned via asset() - this helper runs during rendering and must not
+ * bring the page down.
+ *
+ * @param array{format?: string} $options
+ */
+function image(string $path, int|string $width, int $height = 0, array $options = []): string {
+    // ImageCache rejects traversal, but asset() does not - without this
+    // safeguard the fallback would print a path outside public/, complete with
+    // a ?v= based on the file time.
+    if (str_contains($path, '..') || str_contains($path, "\0")) {
+        return '';
+    }
+
+    if (is_string($width)) {
+        $preset = \App\Services\MediaService::preset($width);
+        if ($preset === null) {
+            return asset($path);
+        }
+
+        [$width, $height] = $preset;
+    }
+
+    if ($width < 1 || $height < 1) {
+        return asset($path);
+    }
+
+    return \App\Services\MediaService::url($path, $width, $height, $options) ?? asset($path);
+}
+
+/**
+ * A ready-made <img> tag with the resized image. The dimensions are written
+ * into the attributes so the browser need not reflow the layout after loading.
+ *
+ * @param array<string, string|null> $attrs
+ */
+function image_tag(string $path, int|string $width, int $height = 0, array $attrs = []): string {
+    if (is_string($width)) {
+        $preset = \App\Services\MediaService::preset($width);
+        [$width, $height] = $preset ?? [0, 0];
+    }
+
+    $attrs += [
+        'src'      => image($path, $width, $height),
+        'alt'      => '',
+        'loading'  => 'lazy',
+        'decoding' => 'async',
+    ];
+
+    if ($width > 0 && $height > 0) {
+        $attrs += ['width' => (string) $width, 'height' => (string) $height];
+    }
+
+    $html = '';
+    foreach ($attrs as $name => $value) {
+        if ($value === null) {
+            continue;
+        }
+
+        $html .= ' ' . esc($name) . '="' . esc($value) . '"';
+    }
+
+    return '<img' . $html . '>';
+}
+
 function svg(string $name, array $attrs = []): string {
     $base = __DIR__ . '/../../public/img/icons/';
     $file = $base . $name . '.svg';
@@ -60,21 +133,12 @@ function svg(string $name, array $attrs = []): string {
         return '';
     }
 
-    // --- SVG Sanitization ---
-    // Inline SVGs run in the page's JS context, so we must strip XSS vectors
-    // before output. This covers the most common attack vectors without needing
-    // an external library.
-
-    // 1. Remove <script> … </script> blocks (case-insensitive, multiline)
+    // Inline SVGs run in the JS context of the page, so XSS vectors must be
+    // stripped before output. This covers the most common cases without
+    // needing an external library.
     $svg = preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $svg);
-
-    // 2. Remove <foreignObject> … </foreignObject> (allows arbitrary HTML injection)
     $svg = preg_replace('/<foreignObject\b[^>]*>.*?<\/foreignObject>/is', '', $svg);
-
-    // 3. Strip on* event handler attributes (onclick, onload, onerror, etc.)
     $svg = preg_replace('/\bon\w+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $svg);
-
-    // 4. Strip href / xlink:href / src with javascript: or data: URIs
     $svg = preg_replace('/\b(?:href|xlink:href|src)\s*=\s*["\']?\s*(?:javascript|data):[^"\'>\s]*/i', '', $svg);
 
     if (!array_key_exists('aria-hidden', $attrs)) {
@@ -96,7 +160,6 @@ function svg(string $name, array $attrs = []): string {
             }
         }
 
-        // Append other attributes
         foreach ($attrs as $k => $v) {
             if ($v === null || $v === '') continue;
             if (preg_match('/\b' . preg_quote($k, '/') . '\s*=\s*/i', $existing)) continue;
@@ -110,13 +173,12 @@ function svg(string $name, array $attrs = []): string {
 }
 
 /**
- * Renders tracking codes (GA4, Gtag, AdWords, Sklik, Facebook Pixel) in the header.
- * 
- * @return string HTML script tags for the tracking codes.
+ * Renders the tracking codes (GA4, Gtag, AdWords, Sklik, Facebook Pixel)
+ * into the header.
  */
 function renderTrackingCodes(): string {
-    // Bez vlastní konfigurace se nic nevykresluje – fallback na main.example.php
-    // by na web pustil ukázková ID.
+    // Without a configuration of its own nothing is rendered - falling back to
+    // main.example.php would let the sample IDs onto the live site.
     $tracking = Config::get('tracking', []);
 
     if (!is_array($tracking) || empty($tracking)) {
@@ -153,7 +215,7 @@ function renderTrackingCodes(): string {
 
     // --- Sklik Retargeting ---
     if (!empty($tracking['sklik_id'])) {
-        // Hodnota jde do JS jako číselný literál, proto natvrdo na int.
+        // The value goes into JS as a numeric literal, hence the hard cast to int.
         $sklikId = (int) trim((string) $tracking['sklik_id']);
         $html .= "\n    <!-- Sklik Retargeting -->\n";
         $html .= "    <script type=\"text/javascript\" src=\"https://c.seznam.cz/js/rc.js\"></script>\n";
@@ -193,64 +255,57 @@ function renderTrackingCodes(): string {
 }
 
 /**
- * Generates a CSRF token if one doesn't exist, stores it in session, and returns it.
- * 
- * @return string The CSRF token.
+ * A flash message stored by the previous request, e.g. after a redirect from
+ * a form. It is written in the controller via $this->session()->flash().
  */
+function flash(string $key, mixed $default = null): mixed {
+    return Session::instance()->getFlash($key, $default);
+}
+
+function has_flash(string $key): bool {
+    return Session::instance()->hasFlash($key);
+}
+
+/**
+ * A previously submitted form value, for pre-filling after a validation error.
+ */
+function old(string $key, mixed $default = ''): mixed {
+    return Session::instance()->old($key, $default);
+}
+
 function csrf_token(): string {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
+    return Session::instance()->token();
 }
 
 function csrf_field(): string {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-    $_SESSION['form_load_time'] = time();
+    // Nothing reads form_load_time yet; it is kept for a future check against
+    // a form submitted suspiciously fast.
+    Session::instance()->set('form_load_time', time());
+
     return '<input type="hidden" name="csrf_token" value="' . esc(csrf_token()) . '">';
 }
 
 /**
- * Validates the request's CSRF token against the one stored in session.
- * Checks both POST data and HTTP headers (X-CSRF-TOKEN).
- * 
- * @param \App\Core\Http\Request|null $request The request object. If null, created from globals.
- * @return bool True if the token is valid, false otherwise.
+ * Validates the CSRF token of the request against the one in the session.
+ * With no request passed in, one is built from the superglobals.
  */
 function validate_csrf(?\App\Core\Http\Request $request = null): bool {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
-
     if ($request === null) {
         $request = \App\Core\Http\Request::createFromGlobals();
     }
 
     $token = $request->post('csrf_token') ?? '';
 
-    // Check header if not present in POST (useful for AJAX)
+    // AJAX calls send the token in a header rather than in the body.
     if (empty($token)) {
         $token = $request->getHeader('x-csrf-token') ?? '';
     }
 
-    if (empty($_SESSION['csrf_token']) || empty($token)) {
-        return false;
-    }
-
-    return hash_equals($_SESSION['csrf_token'], $token);
+    return Session::instance()->validateToken(is_string($token) ? $token : '');
 }
 
 /**
- * Aborts the request with a 403 Forbidden response if CSRF validation fails.
- * 
- * @param \App\Core\Http\Request|null $request The request object.
- * @param \App\Core\Http\Response|null $response The response object.
- * @return void
+ * Sends a 403 and terminates the request when the CSRF token is invalid.
  */
 function check_csrf(?\App\Core\Http\Request $request = null, ?\App\Core\Http\Response $response = null): void {
     if (!validate_csrf($request)) {
@@ -263,5 +318,3 @@ function check_csrf(?\App\Core\Http\Request $request = null, ?\App\Core\Http\Res
         exit;
     }
 }
-
-

@@ -1,0 +1,11 @@
+# Cache generovanych obrazku. Obsah je psany PHP skriptem,
+# takze tu nikdy nesmi nic bezet jako kod.
+Options -Indexes
+
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+<FilesMatch "\.(php|phtml|php[0-9]|phar|pl|py|cgi|sh)$">
+    Require all denied
+</FilesMatch>

@@ -7,17 +7,18 @@ use ReflectionClass;
 use ReflectionProperty;
 
 /**
- * Základ datového objektu.
+ * Base data object.
  *
- * Data modelu = jeho veřejné vlastnosti + volný "bag" ostatních atributů.
- * Chráněný a privátní stav potomků je interní: nepatří do toArray() ani do JSONu
- * a nejde ho přepsat přes pole ani magické metody.
+ * The data of a model = its public properties + a loose "bag" of other
+ * attributes. Protected and private state of subclasses is internal: it belongs
+ * neither in toArray() nor in the JSON, and cannot be overwritten through array
+ * access or the magic methods.
  */
 abstract class Model implements ArrayAccess, JsonSerializable {
     protected array $attributes = [];
 
     /**
-     * Cache veřejných vlastností podle třídy: třída => [název => ReflectionProperty].
+     * Public properties cached per class: class => [name => ReflectionProperty].
      *
      * @var array<class-string, array<string, ReflectionProperty>>
      */
@@ -27,9 +28,6 @@ abstract class Model implements ArrayAccess, JsonSerializable {
         $this->fill($attributes);
     }
 
-    /**
-     * Naplní model z pole.
-     */
     public function fill(array $attributes): static {
         foreach ($attributes as $key => $value) {
             $this->offsetSet((string) $key, $value);
@@ -39,7 +37,7 @@ abstract class Model implements ArrayAccess, JsonSerializable {
     }
 
     /**
-     * Veřejné (nestatické) vlastnosti aktuální třídy.
+     * Public (non-static) properties of the current class.
      *
      * @return array<string, ReflectionProperty>
      */
@@ -59,16 +57,14 @@ abstract class Model implements ArrayAccess, JsonSerializable {
         return self::$propertyCache[$class];
     }
 
-    /**
-     * Je klíč deklarovanou veřejnou vlastností?
-     */
     private function isDeclared(string $key): bool {
         return isset(self::declaredProperties()[$key]);
     }
 
     /**
-     * Přizpůsobí skalární hodnotu (typicky řetězec z databáze) deklarovanému typu vlastnosti,
-     * aby hydratace neshodila aplikaci na TypeError.
+     * Adapts a scalar value (typically a string from the database) to the
+     * declared property type, so that hydration does not bring the application
+     * down with a TypeError.
      */
     private function coerce(string $key, mixed $value): mixed {
         $type = self::declaredProperties()[$key]->getType();
@@ -87,7 +83,7 @@ abstract class Model implements ArrayAccess, JsonSerializable {
     }
 
     /**
-     * Data modelu jako pole: veřejné vlastnosti + volné atributy.
+     * The model data as an array: public properties + loose attributes.
      */
     public function toArray(): array {
         $data = [];
@@ -102,13 +98,12 @@ abstract class Model implements ArrayAccess, JsonSerializable {
     }
 
     /**
-     * Vrátí jen volné atributy, tedy hodnoty bez odpovídající vlastnosti.
+     * Returns only the loose attributes, i.e. values with no matching property.
      */
     public function getAttributes(): array {
         return $this->attributes;
     }
 
-    // ArrayAccess implementation
     public function offsetExists(mixed $offset): bool {
         $offset = (string) $offset;
 
@@ -125,7 +120,7 @@ abstract class Model implements ArrayAccess, JsonSerializable {
         if ($this->isDeclared($offset)) {
             $property = self::declaredProperties()[$offset];
 
-            // Pozor: u typované vlastnosti po unset() by čtení znovu spustilo __get.
+            // Careful: on a typed property after unset(), reading would re-enter __get.
             return $property->isInitialized($this) ? $property->getValue($this) : null;
         }
 
@@ -151,7 +146,8 @@ abstract class Model implements ArrayAccess, JsonSerializable {
         $offset = (string) $offset;
 
         if ($this->isDeclared($offset)) {
-            // unset() místo přiřazení null – null by u nenullable typu skončilo TypeError.
+            // unset() rather than assigning null - null on a non-nullable type
+            // would end in a TypeError.
             unset($this->$offset);
             return;
         }
@@ -159,7 +155,7 @@ abstract class Model implements ArrayAccess, JsonSerializable {
         unset($this->attributes[$offset]);
     }
 
-    // Magic property access – schválně jen delegace, aby platila jedna sada pravidel.
+    // Magic property access - deliberately pure delegation, so one set of rules applies.
     public function __get(string $key): mixed {
         return $this->offsetGet($key);
     }
@@ -176,7 +172,6 @@ abstract class Model implements ArrayAccess, JsonSerializable {
         $this->offsetUnset($key);
     }
 
-    // JsonSerializable implementation
     public function jsonSerialize(): mixed {
         return $this->toArray();
     }

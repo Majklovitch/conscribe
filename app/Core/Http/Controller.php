@@ -6,6 +6,7 @@ use RuntimeException;
 
 abstract class Controller {
     protected ?Request $request = null;
+    protected ?Session $session = null;
 
     public function setRequest(Request $request): void
     {
@@ -21,8 +22,21 @@ abstract class Controller {
         return $this->request;
     }
 
+    public function setSession(Session $session): void
+    {
+        $this->session = $session;
+    }
+
+    protected function session(): Session
+    {
+        if ($this->session === null) {
+            throw new RuntimeException(static::class . ' has no Session; was it created outside the Router?');
+        }
+
+        return $this->session;
+    }
+
     /**
-     * Renders a view template and returns it as a Response.
      * @throws \Throwable
      */
     protected function render(string $view, array $params = [], string $layout = 'main', int $status = 200): Response
@@ -31,7 +45,6 @@ abstract class Controller {
     }
 
     /**
-     * Helper to return a JSON Response.
      * @throws \JsonException
      */
     protected function json(mixed $data, int $statusCode = 200, array $headers = []): Response

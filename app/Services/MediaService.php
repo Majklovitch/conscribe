@@ -1,255 +1,124 @@
 <?php
-/* TODO: Refactor this class to use a more modern and universal approach */
 
 namespace App\Services;
 
-class MediaService
-{
-    private string $storageRoot;
-    private string $publicUrlBase;
+use App\Core\Config;
+use App\Services\Media\ImageCache;
+use App\Services\Media\ProcessorFactory;
 
-    public function __construct(string $storageRoot, string $publicUrlBase = '/media')
+/**
+ * Facade over ImageCache.
+ *
+ * The project has no DI container, so the instance is held statically and built
+ * lazily from the configuration - just like Connection::get() or Config.
+ * All the logic lives in App\Services\Media\ImageCache; once a container is
+ * added, register ImageCache and drop this class.
+ */
+final class MediaService
+{
+    /** Defaults, so the service works even without a 'media' key in the configuration. */
+    private const DEFAULTS = [
+        'driver'        => 'auto',
+        'source_root'   => null,
+        'cache_path'    => 'media/cache',
+        'quality'       => 82,
+        'format'        => 'webp',
+        'max_dimension' => 4000,
+        'presets'       => [],
+    ];
+
+    private static ?ImageCache $cache = null;
+    private static bool $resolved = false;
+
+    /**
+     * Returns null when neither Imagick nor GD is present on the server - the
+     * caller then degrades to the original image instead of a fatal error
+     * during rendering.
+     */
+    public static function cache(): ?ImageCache
     {
-        $this->storageRoot = rtrim($storageRoot, '/');
-        $this->publicUrlBase = rtrim($publicUrlBase, '/');
+        if (self::$resolved) {
+            return self::$cache;
+        }
+
+        self::$resolved = true;
+
+        $config = self::config();
+
+        if (!ProcessorFactory::hasDriver((string) $config['driver'])) {
+            return self::$cache = null;
+        }
+
+        $publicRoot = self::publicRoot();
+        $sourceRoot = $config['source_root'] ? (string) $config['source_root'] : $publicRoot;
+        $cachePath = trim((string) $config['cache_path'], '/');
+
+        self::$cache = new ImageCache(
+            $sourceRoot,
+            $publicRoot . '/' . $cachePath,
+            '/' . $cachePath,
+            ProcessorFactory::make((string) $config['driver']),
+            (int) $config['quality'],
+            (string) $config['format'],
+            (int) $config['max_dimension']
+        );
+
+        return self::$cache;
     }
 
     /**
-     * Downloads media for SKU folder:
-     * - IMAGE: converts to WEBP and creates 500x500 thumb (or reuses original when smaller)
-     * - VIDEO/DOCUMENT: downloads as-is
+     * URL of the cached variant, or null when it cannot be produced.
+     *
+     * @param array{format?: string} $options
      */
-    public function downloadPhotosForSku(string $sku, array $mediaItems): array
+    public static function url(string $path, int $width, int $height, array $options = []): ?string
     {
-        $skuFolder = $this->normalizeSkuFolder($sku);
-        $dir = $this->storageRoot . '/products/' . $skuFolder;
-
-        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-            return [[
-                'id' => 0,
-                'url' => '/img/thumb.jpg',
-                'thumb_url' => '/img/thumb.jpg',
-                'is_primary' => true,
-                'type' => 'IMAGE',
-            ]];
-        }
-
-        $result = [];
-
-        foreach ($mediaItems as $item) {
-            $type = strtoupper($item['type'] ?? 'IMAGE');
-            if (!in_array($type, ['IMAGE', 'VIDEO', 'DOCUMENT'], true) || empty($item['url'])) {
-                continue;
-            }
-
-            $mediaId = isset($item['id']) ? (string)$item['id'] : (string)crc32($item['url']);
-
-            if ($type !== 'IMAGE') {
-                $ext = $this->guessExtension((string)$item['url'], $type);
-                $filename = $mediaId . '.' . $ext;
-                $destPath = $dir . '/' . $filename;
-
-                if (!file_exists($destPath)) {
-                    $this->downloadFile((string)$item['url'], $destPath, $type);
-                }
-
-                if (file_exists($destPath)) {
-                    $item['url'] = $this->publicUrlBase . '/products/' . $skuFolder . '/' . $filename;
-                    $item['type'] = $type;
-                    $result[] = $item;
-                }
-                continue;
-            }
-
-            $webpFilename = $mediaId . '.webp';
-            $thumbFilename = $mediaId . '_thumb.webp';
-
-            $webpPath = $dir . '/' . $webpFilename;
-            $thumbPath = $dir . '/' . $thumbFilename;
-            $useOriginalForThumb = false;
-
-            if (!file_exists($webpPath) || !file_exists($thumbPath)) {
-                $tmpPath = tempnam(sys_get_temp_dir(), 'media_alt_');
-                if ($tmpPath && $this->downloadFile((string)$item['url'], $tmpPath, $type)) {
-                    $this->convertAndCreateThumb($tmpPath, $webpPath, $thumbPath, $useOriginalForThumb);
-                }
-
-                if ($tmpPath && file_exists($tmpPath)) {
-                    unlink($tmpPath);
-                }
-            }
-
-            if (file_exists($webpPath) && ($useOriginalForThumb || file_exists($thumbPath))) {
-                $item['url'] = $this->publicUrlBase . '/products/' . $skuFolder . '/' . $webpFilename;
-                $item['thumb_url'] = $useOriginalForThumb
-                    ? $item['url']
-                    : $this->publicUrlBase . '/products/' . $skuFolder . '/' . $thumbFilename;
-                $item['type'] = 'IMAGE';
-                $result[] = $item;
-            }
-        }
-
-        if (empty($result)) {
-            return [[
-                'id' => 0,
-                'url' => '/img/thumb.jpg',
-                'thumb_url' => '/img/thumb.jpg',
-                'is_primary' => true,
-                'type' => 'IMAGE',
-            ]];
-        }
-
-        return $result;
+        return self::cache()?->get($path, $width, $height, $options);
     }
 
-    public function deleteForSku(string $sku): void
+    /**
+     * A named size from the configuration, e.g. 'thumb' => [500, 500].
+     *
+     * @return array{0:int,1:int}|null
+     */
+    public static function preset(string $name): ?array
     {
-        $dir = $this->storageRoot . '/products/' . $this->normalizeSkuFolder($sku);
-        if (!is_dir($dir)) {
-            return;
+        $presets = self::config()['presets'];
+
+        if (!is_array($presets) || !isset($presets[$name]) || !is_array($presets[$name])) {
+            return null;
         }
 
-        foreach (glob($dir . '/*') as $file) {
-            if (is_file($file)) {
-                unlink($file);
-            }
+        $size = array_values($presets[$name]);
+        if (count($size) < 2) {
+            return null;
         }
 
-        rmdir($dir);
+        return [(int) $size[0], (int) $size[1]];
     }
 
-    private function normalizeSkuFolder(string $sku): string
+    /**
+     * Drops the statically held instance. Meant for tests, and for the case
+     * where the configuration is overwritten at runtime via Config::set().
+     */
+    public static function reset(): void
     {
-        $normalized = strtolower(trim($sku));
-        $normalized = preg_replace('/[^a-z0-9-]+/', '-', $normalized);
-        $normalized = trim($normalized, '-');
-
-        if ($normalized === '') {
-            $normalized = 'unknown';
-        }
-
-        if (!str_starts_with($normalized, 'sku-')) {
-            $normalized = 'sku-' . $normalized;
-        }
-
-        return $normalized;
+        self::$cache = null;
+        self::$resolved = false;
     }
 
-    private function downloadFile(string $url, string $destination, string $type = 'IMAGE'): bool
+    /**
+     * @return array<string, mixed>
+     */
+    private static function config(): array
     {
-        $fp = @fopen($destination, 'wb');
-        if (!$fp) {
-            return false;
-        }
+        $media = Config::get('media', []);
 
-        $timeout = match (strtoupper($type)) {
-            'VIDEO' => 300,
-            'DOCUMENT' => 120,
-            default => 60,
-        };
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_FILE => $fp,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => $timeout,
-            CURLOPT_FAILONERROR => true,
-        ]);
-
-        $ok = curl_exec($ch);
-        curl_close($ch);
-        fclose($fp);
-
-        if (!$ok && file_exists($destination)) {
-            unlink($destination);
-        }
-
-        return (bool)$ok;
+        return array_merge(self::DEFAULTS, is_array($media) ? $media : []);
     }
 
-    private function guessExtension(string $url, string $type): string
+    private static function publicRoot(): string
     {
-        $path = (string)parse_url($url, PHP_URL_PATH);
-        $ext = strtolower((string)pathinfo($path, PATHINFO_EXTENSION));
-
-        if ($ext !== '' && strlen($ext) <= 8) {
-            return $ext;
-        }
-
-        return match (strtoupper($type)) {
-            'VIDEO' => 'mp4',
-            'DOCUMENT' => 'pdf',
-            default => 'bin',
-        };
-    }
-
-    private function convertAndCreateThumb(string $sourcePath, string $webpPath, string $thumbPath, bool &$useOriginalForThumb = false): bool
-    {
-        $useOriginalForThumb = false;
-
-        if (!extension_loaded('imagick') || !class_exists('Imagick')) {
-            return false;
-        }
-
-        if (!is_file($sourcePath) || !is_readable($sourcePath)) {
-            return false;
-        }
-
-        $image = null;
-        $thumb = null;
-        $okWebp = false;
-        $okThumb = false;
-
-        try {
-            $image = new \Imagick();
-            $image->readImage($sourcePath);
-            $image->autoOrient();
-            $image->setImageFormat('webp');
-            $image->setImageCompressionQuality(82);
-
-            $okWebp = (bool)$image->writeImage($webpPath);
-
-            $width = $image->getImageWidth();
-            $height = $image->getImageHeight();
-
-            if ($width < 500 || $height < 500) {
-                $useOriginalForThumb = true;
-                if (file_exists($thumbPath)) {
-                    unlink($thumbPath);
-                }
-                return $okWebp;
-            }
-
-            $thumb = clone $image;
-            $thumb->cropThumbnailImage(500, 500);
-            $thumb->setImageFormat('webp');
-            $thumb->setImageCompressionQuality(82);
-            $okThumb = (bool)$thumb->writeImage($thumbPath);
-
-            return $okWebp && $okThumb;
-        } catch (\Throwable $e) {
-            return false;
-        } finally {
-            if ($thumb instanceof \Imagick) {
-                $thumb->clear();
-                $thumb->destroy();
-            }
-
-            if ($image instanceof \Imagick) {
-                $image->clear();
-                $image->destroy();
-            }
-
-            $thumbRequired = !$useOriginalForThumb;
-            if (!$okWebp || ($thumbRequired && !$okThumb)) {
-                if (file_exists($webpPath)) {
-                    unlink($webpPath);
-                }
-                if (file_exists($thumbPath)) {
-                    unlink($thumbPath);
-                }
-            }
-        }
+        return dirname(__DIR__, 2) . '/public';
     }
 }
-

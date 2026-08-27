@@ -9,23 +9,17 @@ class MenuRepository {
     private array $items = [];
 
     public function __construct() {
-        // Populate default menu items
-        $this->add('Domů', '/');
+        $this->add('Home', '/');
         $this->add("Test", '/test');
     }
 
     /**
-     * Add a menu item to the repository.
-     *
-     * @param string $name
-     * @param string $link
      * @param MenuItem[] $children
-     * @return self
      */
     public function add(string $name, string $link, array $children = []): self {
         $active = $this->isLinkActive($link);
-        
-        // If any of the children are active, parent should also be active
+
+        // An active child makes the parent active too.
         foreach ($children as $child) {
             if ($child->active) {
                 $active = true;
@@ -37,22 +31,13 @@ class MenuRepository {
         return $this;
     }
 
-    /**
-     * Add a submenu item to a parent menu item by name.
-     *
-     * @param string $parentName Name of the parent menu item.
-     * @param string $name Name of the submenu item.
-     * @param string $link Link of the submenu item.
-     * @return self
-     */
     public function addSubmenu(string $parentName, string $name, string $link): self {
         $parent = $this->findItemByName($this->items, $parentName);
         if ($parent !== null) {
             $active = $this->isLinkActive($link);
             $child = new MenuItem($name, $link, $active);
             $parent->children[] = $child;
-            
-            // If the child is active, cascade active status up
+
             if ($child->active) {
                 $this->bubbleActive($this->items, $parentName);
             }
@@ -61,11 +46,7 @@ class MenuRepository {
     }
 
     /**
-     * Find a MenuItem by its name recursively.
-     *
-     * @param array $items
-     * @param string $name
-     * @return MenuItem|null
+     * @param MenuItem[] $items
      */
     private function findItemByName(array $items, string $name): ?MenuItem {
         foreach ($items as $item) {
@@ -83,11 +64,9 @@ class MenuRepository {
     }
 
     /**
-     * Bubbles the active state up to all parent items.
+     * Bubbles the active state up into all parent items.
      *
-     * @param array $items
-     * @param string $targetName
-     * @return bool
+     * @param MenuItem[] $items
      */
     private function bubbleActive(array $items, string $targetName): bool {
         foreach ($items as $item) {
@@ -106,20 +85,12 @@ class MenuRepository {
     }
 
     /**
-     * Get all menu items.
-     *
      * @return MenuItem[]
      */
     public function all(): array {
         return $this->items;
     }
 
-    /**
-     * Check if the given link matches the current page or URI.
-     *
-     * @param string $link
-     * @return bool
-     */
     public function isLinkActive(string $link): bool {
         if (str_starts_with($link, '/#') || str_starts_with($link, '#')) {
             return false;
@@ -127,24 +98,20 @@ class MenuRepository {
 
         $currentPage = defined('CURRENT_PAGE') ? CURRENT_PAGE : 'home';
 
-        // Get current path from request URI
         $currentUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
         $currentUri = '/' . trim($currentUri, '/');
-        
+
         $linkUri = parse_url($link, PHP_URL_PATH) ?? '/';
         $linkUri = '/' . trim($linkUri, '/');
 
-        // Check if exact match
         if ($currentUri === $linkUri) {
             return true;
         }
 
-        // Special handling for home page
         if ($linkUri === '/' || $linkUri === '/home') {
             return $currentPage === 'home' || $currentUri === '/home';
         }
 
-        // Check if the current page matches the link path segment
         return trim($linkUri, '/') === $currentPage;
     }
 }

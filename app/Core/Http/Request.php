@@ -2,10 +2,6 @@
 
 namespace App\Core\Http;
 
-/**
- * Class Request
- * Represents an HTTP Request.
- */
 class Request
 {
     private string $path;
@@ -19,9 +15,6 @@ class Request
     private ?string $rawBody;
     private bool $hasInvalidJson;
 
-    /**
-     * Request constructor.
-     */
     public function __construct(
         array $queryParams = [],
         array $bodyParams = [],
@@ -47,14 +40,11 @@ class Request
         $this->headers = $this->extractHeaders($server);
     }
 
-    /**
-     * Creates a Request instance based on PHP superglobals.
-     */
     public static function createFromGlobals(): self
     {
         $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '');
 
-        // U multipart/form-data je php://input vždy prázdné, není co číst.
+        // With multipart/form-data php://input is always empty, nothing to read.
         $rawBody = str_contains($contentType, 'multipart/form-data')
             ? null
             : (file_get_contents('php://input') ?: '');
@@ -62,7 +52,6 @@ class Request
         $bodyParams = $_POST;
         $hasInvalidJson = false;
 
-        // Automatically decode JSON body if Content-Type is application/json
         if ($rawBody !== null && str_contains($contentType, 'application/json')) {
             $decoded = json_decode($rawBody, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
@@ -75,22 +64,16 @@ class Request
         return new self($_GET, $bodyParams, $_COOKIE, $_FILES, $_SERVER, $rawBody, $hasInvalidJson);
     }
 
-    /**
-     * Checks if the request contains invalid/malformed JSON.
-     */
     public function hasInvalidJson(): bool
     {
         return $this->hasInvalidJson;
     }
 
-    /**
-     * Extracts HTTP headers from $_SERVER.
-     */
     private function extractHeaders(array $server): array
     {
         $headers = [];
         foreach ($server as $key => $value) {
-            // Apache při rewritu přesouvá Authorization do REDIRECT_HTTP_AUTHORIZATION.
+            // On a rewrite, Apache moves Authorization into REDIRECT_HTTP_AUTHORIZATION.
             if (str_starts_with($key, 'REDIRECT_HTTP_')) {
                 $key = substr($key, 9);
             }
@@ -107,8 +90,8 @@ class Request
     }
 
     /**
-     * Gets the request path without leading/trailing slashes.
-     * Kořen webu je prázdný řetězec (''), nikoli '/'.
+     * The path without leading or trailing slashes.
+     * The site root is an empty string, not a slash.
      */
     public function getPath(): string
     {
@@ -116,8 +99,8 @@ class Request
     }
 
     /**
-     * Vrátí kopii requestu s jinou cestou.
-     * Používají moduly, které z cesty odebírají vlastní prefix (např. jazyk).
+     * Returns a copy of the request with a different path.
+     * Used by modules that strip their own prefix (a language, say) from it.
      */
     public function withPath(string $path): self
     {
@@ -128,7 +111,7 @@ class Request
     }
 
     /**
-     * První segment cesty, nebo 'home' pro kořen webu.
+     * The first path segment, or 'home' for the site root.
      */
     public function getFirstSegment(string $default = 'home'): string
     {
@@ -137,51 +120,36 @@ class Request
         return $segment === '' ? $default : $segment;
     }
 
-    /**
-     * Gets the HTTP method.
-     */
     public function getMethod(): string
     {
         return $this->method;
     }
 
-    /**
-     * Checks if the request method is GET.
-     */
     public function isGet(): bool
     {
         return $this->method === 'GET';
     }
 
-    /**
-     * Checks if the request method is POST.
-     */
     public function isPost(): bool
     {
         return $this->method === 'POST';
     }
 
-    /**
-     * Checks if the request method is HEAD.
-     */
     public function isHead(): bool
     {
         return $this->method === 'HEAD';
     }
 
-    /**
-     * Checks if the request is an AJAX request.
-     */
     public function isAjax(): bool
     {
         return strtolower($this->getHeader('x-requested-with') ?? '') === 'xmlhttprequest';
     }
 
     /**
-     * Zjistí, zda požadavek přišel přes HTTPS.
-     * Bere v úvahu i běžné reverzní proxy (Cloudflare, Azure, load balancery).
+     * Determines whether the request arrived over HTTPS.
+     * Also accounts for the common reverse proxies (Cloudflare, Azure, load balancers).
      *
-     * @param array|null $server Výchozí je $_SERVER, aby šlo volat i staticky před vytvořením requestu.
+     * @param array|null $server Defaults to $_SERVER, so it can be called statically before a request exists.
      */
     public static function isSecure(?array $server = null): bool
     {
@@ -209,8 +177,8 @@ class Request
     }
 
     /**
-     * IP adresa klienta. Hlavičkám proxy se věří jen pokud je proxy důvěryhodná,
-     * proto je výchozí zdroj vždy REMOTE_ADDR.
+     * Client IP address. Proxy headers are trusted only when the proxy itself is,
+     * so the default source is always REMOTE_ADDR.
      */
     public function getClientIp(bool $trustProxy = false): ?string
     {
@@ -225,89 +193,59 @@ class Request
     }
 
     /**
-     * Gets a parameter from query params or POST body.
+     * A value from the query string, falling back to the request body.
      */
     public function get(string $key, mixed $default = null): mixed
     {
         return $this->queryParams[$key] ?? $this->bodyParams[$key] ?? $default;
     }
 
-    /**
-     * Gets a query parameter (from $_GET).
-     */
     public function query(string $key, mixed $default = null): mixed
     {
         return $this->queryParams[$key] ?? $default;
     }
 
-    /**
-     * Gets a body parameter (from $_POST or JSON).
-     */
     public function post(string $key, mixed $default = null): mixed
     {
         return $this->bodyParams[$key] ?? $default;
     }
 
-    /**
-     * Gets all query parameters.
-     */
     public function getQueryParams(): array
     {
         return $this->queryParams;
     }
 
-    /**
-     * Gets all body parameters.
-     */
     public function getBodyParams(): array
     {
         return $this->bodyParams;
     }
 
-    /**
-     * Gets a cookie value.
-     */
     public function cookie(string $key, mixed $default = null): mixed
     {
         return $this->cookies[$key] ?? $default;
     }
 
-    /**
-     * Gets an uploaded file.
-     */
     public function file(string $key): ?array
     {
         return $this->files[$key] ?? null;
     }
 
-    /**
-     * Gets all headers.
-     */
     public function getHeaders(): array
     {
         return $this->headers;
     }
 
-    /**
-     * Gets a specific header.
-     */
     public function getHeader(string $name, ?string $default = null): ?string
     {
         $name = strtolower($name);
         return $this->headers[$name] ?? $default;
     }
 
-    /**
-     * Gets the raw request body.
-     */
     public function getRawBody(): ?string
     {
         return $this->rawBody;
     }
 
-    /**
-     * Gets raw $_SERVER array.
-     */
     public function getServerParams(): array
     {
         return $this->server;

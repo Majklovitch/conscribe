@@ -4,7 +4,7 @@ namespace App\Core\Template;
 use RuntimeException;
 
 /**
- * Vyhozeno, pokud šablona neexistuje nebo má nepovolenou cestu.
+ * Thrown when a template does not exist or has a disallowed path.
  */
 class ViewNotFoundException extends RuntimeException {
 }

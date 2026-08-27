@@ -1,8 +1,8 @@
-name: nazev_sluzby
+name: service_name
 services:
   web:
     build: .
-    container_name: nazev_webu
+    container_name: web_name
     ports:
       - "8XXX:80"
     volumes:

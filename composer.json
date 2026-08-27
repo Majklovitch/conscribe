@@ -17,14 +17,28 @@
         }
     ],
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.4",
         "ext-mbstring": "*",
-        "ext-pdo": "*"
+        "ext-pdo": "*",
+        "ext-gd": "*",
+        "phpmailer/phpmailer": "^7.1",
+        "monolog/monolog": "^3.10"
+    },
+    "suggest": {
+        "ext-imagick": "Preferred image driver for MediaService; GD is used as a fallback.",
+        "ext-exif": "Corrects rotated JPEG photos when the GD driver is used."
     },
     "config": {
         "optimize-autoloader": true
     },
     "scripts": {
         "lint": "php bin/lint.php"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "*",
+        "phpunit/phpunit": "*",
+        "friendsofphp/php-cs-fixer": "*",
+        "filp/whoops": "*",
+        "symfony/var-dumper": "*"
     }
 }
