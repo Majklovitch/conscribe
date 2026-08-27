@@ -2,10 +2,13 @@
 
 return [
     'conscribe' => [
-        'ver' => '1.3.2',
+        'ver' => '1.3.6',
         'author' => 'Majklovitch',
         'environment' => 'development',
         'base_url' => 'http://localhost:8080/',
+    ],
+    'modules' => [
+        'LanguageMutations',
     ],
     'contact_form' => [
         'to_email' => 'test@testserver.com',

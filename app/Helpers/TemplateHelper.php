@@ -1,6 +1,17 @@
 <?php
-function esc(string $string): string {
-    return trim(htmlspecialchars($string, ENT_QUOTES));
+
+use App\Core\Config;
+
+/**
+ * Escapuje hodnotu pro vložení do HTML.
+ * Přijímá i null a čísla, protože v šablonách jde typicky o volitelná data.
+ */
+function esc(mixed $value): string {
+    if ($value === null || is_array($value) || (is_object($value) && !$value instanceof Stringable)) {
+        return '';
+    }
+
+    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 /**
@@ -15,17 +26,27 @@ function truncate(string $text, int $length = 100, string $append = '...'): stri
     return mb_substr($text, 0, $length) . $append;
 }
 function component(string $name, array $data = []): void {
-    $file = __DIR__ . "/../components/$name.php";
-    if(file_exists($file)) {
-        extract($data);
+    if (str_contains($name, '..')) {
+        return;
+    }
+
+    $file = dirname(__DIR__) . "/Views/components/$name.php";
+    if (is_file($file)) {
+        extract($data, EXTR_SKIP);
         include $file;
-    } else {
-        echo "";
     }
 }
+
+/**
+ * Odkaz na statický soubor s cache busterem odvozeným z času změny souboru.
+ * Cesta se hledá v public/, nezávisle na aktuálním pracovním adresáři.
+ */
 function asset(string $path): string {
-    $version = file_exists($path) ? filemtime($path) : '1.0';
-    return '/' . $path . '?v=' . $version;
+    $relative = ltrim($path, '/');
+    $file = dirname(__DIR__, 2) . '/public/' . $relative;
+    $version = is_file($file) ? (string) filemtime($file) : '1.0';
+
+    return '/' . $relative . '?v=' . $version;
 }
 function svg(string $name, array $attrs = []): string {
     $base = __DIR__ . '/../../public/img/icons/';
@@ -94,20 +115,11 @@ function svg(string $name, array $attrs = []): string {
  * @return string HTML script tags for the tracking codes.
  */
 function renderTrackingCodes(): string {
-    $configPath = dirname(__DIR__) . '/config.php';
-    if (!file_exists($configPath)) {
-        // Fallback to example configuration if the main config doesn't exist
-        $configPath = dirname(__DIR__) . '/main.example.php';
-    }
+    // Bez vlastní konfigurace se nic nevykresluje – fallback na main.example.php
+    // by na web pustil ukázková ID.
+    $tracking = Config::get('tracking', []);
 
-    if (!file_exists($configPath)) {
-        return '';
-    }
-
-    $config = require $configPath;
-    $tracking = $config['tracking'] ?? [];
-
-    if (empty($tracking)) {
+    if (!is_array($tracking) || empty($tracking)) {
         return '';
     }
 
@@ -141,12 +153,13 @@ function renderTrackingCodes(): string {
 
     // --- Sklik Retargeting ---
     if (!empty($tracking['sklik_id'])) {
-        $sklikId = trim($tracking['sklik_id']);
+        // Hodnota jde do JS jako číselný literál, proto natvrdo na int.
+        $sklikId = (int) trim((string) $tracking['sklik_id']);
         $html .= "\n    <!-- Sklik Retargeting -->\n";
         $html .= "    <script type=\"text/javascript\" src=\"https://c.seznam.cz/js/rc.js\"></script>\n";
         $html .= "    <script type=\"text/javascript\">\n";
         $html .= "        /* <![CDATA[ */\n";
-        $html .= "        var seznam_retargeting_id = " . esc($sklikId) . ";\n";
+        $html .= "        var seznam_retargeting_id = " . $sklikId . ";\n";
         $html .= "        if (window.rc && window.rc.retargeting) {\n";
         $html .= "            window.rc.retargeting(seznam_retargeting_id);\n";
         $html .= "        }\n";
@@ -206,16 +219,16 @@ function csrf_field(): string {
  * Validates the request's CSRF token against the one stored in session.
  * Checks both POST data and HTTP headers (X-CSRF-TOKEN).
  * 
- * @param \App\Core\Request|null $request The request object. If null, created from globals.
+ * @param \App\Core\Http\Request|null $request The request object. If null, created from globals.
  * @return bool True if the token is valid, false otherwise.
  */
-function validate_csrf(?\App\Core\Request $request = null): bool {
+function validate_csrf(?\App\Core\Http\Request $request = null): bool {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
 
     if ($request === null) {
-        $request = \App\Core\Request::createFromGlobals();
+        $request = \App\Core\Http\Request::createFromGlobals();
     }
 
     $token = $request->post('csrf_token') ?? '';
@@ -235,14 +248,14 @@ function validate_csrf(?\App\Core\Request $request = null): bool {
 /**
  * Aborts the request with a 403 Forbidden response if CSRF validation fails.
  * 
- * @param \App\Core\Request|null $request The request object.
- * @param \App\Core\Response|null $response The response object.
+ * @param \App\Core\Http\Request|null $request The request object.
+ * @param \App\Core\Http\Response|null $response The response object.
  * @return void
  */
-function check_csrf(?\App\Core\Request $request = null, ?\App\Core\Response $response = null): void {
+function check_csrf(?\App\Core\Http\Request $request = null, ?\App\Core\Http\Response $response = null): void {
     if (!validate_csrf($request)) {
         if ($response === null) {
-            $response = new \App\Core\Response();
+            $response = new \App\Core\Http\Response();
         }
         $response->setStatusCode(403);
         $response->setContent("<h1>403 Forbidden</h1><p>CSRF token validation failed. Request blocked.</p>");

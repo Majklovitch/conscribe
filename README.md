@@ -130,7 +130,7 @@ To send custom variables to your views (such as dynamic titles, meta description
 // app/Controllers/WebController.php
 namespace App\Controllers;
 
-use App\Core\Controller;
+use App\Core\Http\Controller;
 
 class WebController extends Controller {
     

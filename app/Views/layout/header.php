@@ -11,17 +11,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="<?= esc($pageDescription) ?>">
-    <link type="text/css" rel="stylesheet" href="/css/style.css?v=<?= asset('/js/main.js') ?>">
+    <link type="text/css" rel="stylesheet" href="<?= asset('css/style.css') ?>">
     <link type="text/css" rel="stylesheet" href="/css/cookieconsent.css">
     <script src="/js/cookieconsent.umd.js" defer></script>
-    <script src="/js/main.js?v=<?= asset('/js/main.js'); ?>" defer></script>
+    <script src="<?= asset('js/main.js') ?>" defer></script>
     <script src="/js/spotlight.bundle.js" defer></script>
-    <title><?= esc($pageTitle) ?> | MVC_Projekt</title>
+    <title><?= esc($pageTitle) ?> | ConscribePHP</title>
     <?= renderTrackingCodes() ?>
 </head>
 <body>
 <header>
-    <p>Webový projekt</p>
+    <p>ConscribePHP</p>
     <nav>
         <ul>
             <?php

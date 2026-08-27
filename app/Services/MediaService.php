@@ -1,4 +1,5 @@
 <?php
+/* TODO: Refactor this class to use a more modern and universal approach */
 
 namespace App\Services;
 
