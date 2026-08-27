@@ -1,6 +1,12 @@
 <?php
 
+<<<<<<<< HEAD:app/Models/Menu/MenuRepository.php
 namespace App\Models\Menu;
+========
+namespace App\Models\Repositories;
+
+use App\Models\MenuItem;
+>>>>>>>> d77c72750a39fa698410a6019133648e5436ccd7:app/Models/Repositories/MenuRepository.php
 
 class MenuRepository {
     /**
