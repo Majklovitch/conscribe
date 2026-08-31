@@ -1,0 +1,31 @@
+.primary-button,
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: 0.7rem 1.4rem;
+    border-radius: var(--radius-full);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+.primary-button {
+    background: linear-gradient(135deg, var(--color-accent-light), var(--color-accent));
+    color: #06231e;
+    box-shadow: var(--shadow);
+}
+.primary-button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+.secondary-button {
+    background: transparent;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+.secondary-button:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-2px);
+}

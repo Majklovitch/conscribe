@@ -7,10 +7,6 @@ use App\Core\Http\Response;
 use ErrorException;
 use Psr\Log\LoggerInterface;
 use Throwable;
-use Whoops\Handler\JsonResponseHandler;
-use Whoops\Handler\PlainTextHandler;
-use Whoops\Handler\PrettyPageHandler;
-use Whoops\Run;
 
 /**
  * Global handler for PHP errors, uncaught exceptions and fatal errors.
@@ -19,16 +15,30 @@ use Whoops\Run;
  * a 500 from routing). Anything that fails inside a controller or outside the
  * router would otherwise end as a blank page - here it is logged and the same
  * error page is rendered.
+ *
+ * In development this whole class steps aside: Debug::enable() hands the
+ * handlers to Tracy, which needs them for its blue screen and debug bar, and
+ * logs through TracyMonologAdapter into the very same logger.
  */
 class ErrorHandler {
     /**
      * Errors after which PHP does not continue - catchable only at shutdown.
+     * Public because Debug watches for the same set in development.
      */
-    private const FATAL = E_ERROR | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_USER_ERROR;
+    public const FATAL = E_ERROR | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_USER_ERROR;
 
     private static bool $handled = false;
 
     private static ?LoggerInterface $logger = null;
+
+    /**
+     * Exceptions already written to the log. Tracy can reach the same throwable
+     * from two directions (the handler below and its own Debugger::log()), and
+     * one failure deserves one log line.
+     *
+     * @var \WeakMap<\Throwable, true>|null
+     */
+    private static ?\WeakMap $logged = null;
 
     /**
      * The logger is held lazily: nothing is logged on a successful request, so
@@ -50,37 +60,33 @@ class ErrorHandler {
     ): void {
         self::$logger = $logger;
 
+        // Tracy owns the handlers in development - registering ours on top
+        // would only log everything a second time.
+        if (Debug::enable($isDevelopment, $logger)) {
+            return;
+        }
+
         set_error_handler(static function (int $severity, string $message, string $file, int $line): bool {
             // Respect both error_reporting and the '@' operator.
             if (!(error_reporting() & $severity)) {
                 return false;
             }
 
-            self::logger()->log(self::severityToLevel($severity), $message, [
-                'file'     => $file,
-                'line'     => $line,
-                'severity' => self::severityName($severity),
-            ]);
+            self::logPhpError($severity, $message, $file, $line);
 
             // false = PHP also handles the error its own way (display_errors in development).
             return false;
         });
 
-        set_exception_handler(static function (Throwable $e) use ($isDevelopment, $renderer): void {
+        set_exception_handler(static function (Throwable $e) use ($renderer): void {
             self::$handled = true;
 
-            self::logger()->critical('Uncaught {class}: {message}', [
-                'class'     => $e::class,
-                'message'   => $e->getMessage(),
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-                'exception' => $e,
-            ]);
+            self::logException($e);
 
-            self::renderFailure($e, $isDevelopment, $renderer);
+            self::renderFailure($renderer);
         });
 
-        register_shutdown_function(static function () use ($isDevelopment, $renderer): void {
+        register_shutdown_function(static function () use ($renderer): void {
             $error = error_get_last();
 
             // An uncaught exception was already dealt with by the handler above;
@@ -89,18 +95,84 @@ class ErrorHandler {
                 return;
             }
 
-            self::logger()->alert($error['message'], [
-                'file'     => $error['file'],
-                'line'     => $error['line'],
-                'severity' => self::severityName($error['type']),
-            ]);
+            self::logFatal($error);
 
-            $fatal = new ErrorException(
-                $error['message'], 0, $error['type'], $error['file'], $error['line']
-            );
-
-            self::renderFailure($fatal, $isDevelopment, $renderer);
+            self::renderFailure($renderer);
         });
+    }
+
+    /**
+     * Writes an uncaught exception to the log.
+     *
+     * Public because in development the handlers belong to Tracy - Debug wraps
+     * them and calls in here, so the log line looks the same in both
+     * environments. Logging the same throwable twice is a no-op.
+     *
+     * The Tracy blue screen for the failure is saved next to the log and its
+     * file name goes into the record as 'dump', so the text line points at the
+     * page with the source, the trace and the variables.
+     */
+    public static function logException(Throwable $e, string $level = 'critical'): void {
+        self::$logged ??= new \WeakMap();
+
+        if (isset(self::$logged[$e])) {
+            return;
+        }
+
+        self::$logged[$e] = true;
+
+        $context = [
+            'class'     => $e::class,
+            'message'   => $e->getMessage(),
+            'file'      => $e->getFile(),
+            'line'      => $e->getLine(),
+            'exception' => $e,
+        ];
+
+        if (($dump = Dump::write($e)) !== null) {
+            $context['dump'] = $dump;
+        }
+
+        self::logger()->log($level, 'Uncaught {class}: {message}', $context);
+    }
+
+    /**
+     * Writes a PHP error (warning, notice, deprecation) to the log.
+     */
+    public static function logPhpError(int $severity, string $message, string $file, int $line): void {
+        self::logger()->log(self::severityToLevel($severity), $message, [
+            'file'     => $file,
+            'line'     => $line,
+            'severity' => self::severityName($severity),
+        ]);
+    }
+
+    /**
+     * Writes a fatal error - the one PHP does not survive - to the log.
+     *
+     * There is no throwable to render at this point, so one is rebuilt from
+     * what PHP reported - purely to get a blue screen out of it. The record
+     * itself keeps the raw message: 'Uncaught ErrorException' would be a lie
+     * about a fatal such as an exceeded execution time.
+     *
+     * @param array{type: int, message: string, file: string, line: int} $error from error_get_last()
+     */
+    public static function logFatal(array $error): void {
+        $context = [
+            'file'     => $error['file'],
+            'line'     => $error['line'],
+            'severity' => self::severityName($error['type']),
+        ];
+
+        $fatal = new ErrorException(
+            $error['message'], 0, $error['type'], $error['file'], $error['line']
+        );
+
+        if (($dump = Dump::write($fatal)) !== null) {
+            $context['dump'] = $dump;
+        }
+
+        self::logger()->alert($error['message'], $context);
     }
 
     /**
@@ -111,21 +183,19 @@ class ErrorHandler {
         restore_exception_handler();
         self::$handled = false;
         self::$logger = null;
+        self::$logged = null;
     }
 
     /**
      * Renders a 500. Any output in progress is discarded so the error page does
      * not get glued onto half of an unfinished template.
+     *
+     * Only the production path lives here - in development the request never
+     * reaches this method, Tracy renders the blue screen instead.
      */
-    private static function renderFailure(Throwable $e, bool $isDevelopment, ?callable $renderer): void {
+    private static function renderFailure(?callable $renderer): void {
         while (ob_get_level() > 0) {
             ob_end_clean();
-        }
-
-        if ($isDevelopment) {
-            self::debugPage($e)->send();
-
-            return;
         }
 
         // Rendering the error page can itself fail (unreachable DB, missing
@@ -144,73 +214,6 @@ class ErrorHandler {
         }
 
         (new Response('Error 500: Internal server error.', 500, ['Content-Type' => 'text/plain; charset=utf-8']))->send();
-    }
-
-    /**
-     * Developer error page.
-     *
-     * Whoops is a dev dependency; production installs with --no-dev and does not
-     * have it, so it is used only when genuinely available. It runs purely as a
-     * renderer (allowQuit + writeToOutput off) - it is not allowed to register
-     * its own handlers, which would override the logging into Monolog.
-     */
-    private static function debugPage(Throwable $e): Response {
-        if (class_exists(Run::class)) {
-            $whoops = new Run();
-            $whoops->allowQuit(false);
-            $whoops->writeToOutput(false);
-            $whoops->sendHttpCode(false);
-
-            [$handler, $contentType] = self::debugHandler();
-            $whoops->pushHandler($handler);
-
-            return new Response($whoops->handleException($e), 500, ['Content-Type' => $contentType]);
-        }
-
-        return new Response(
-            sprintf("%s: %s\nin %s:%d\n\n%s", $e::class, $e->getMessage(), $e->getFile(), $e->getLine(), $e->getTraceAsString()),
-            500,
-            ['Content-Type' => 'text/plain; charset=utf-8']
-        );
-    }
-
-    /**
-     * Picks the Whoops handler based on who is asking. An HTML page is useless
-     * both in a fetch() call and in the console.
-     *
-     * @return array{0: \Whoops\Handler\HandlerInterface, 1: string}
-     */
-    private static function debugHandler(): array {
-        if (PHP_SAPI === 'cli') {
-            $handler = new PlainTextHandler();
-            $handler->addTraceToOutput(true);
-
-            return [$handler, 'text/plain; charset=utf-8'];
-        }
-
-        $request = Request::createFromGlobals();
-        $wantsJson = $request->isAjax()
-            || str_contains(strtolower($request->getHeader('accept', '') ?? ''), 'application/json');
-
-        if ($wantsJson) {
-            $handler = new JsonResponseHandler();
-            $handler->addTraceToOutput(true);
-
-            return [$handler, 'application/json; charset=utf-8'];
-        }
-
-        $handler = new PrettyPageHandler();
-        $handler->setPageTitle('Conscribe - application error');
-        $handler->addDataTable('Conscribe request', [
-            'method' => $request->getMethod(),
-            'path'   => '/' . $request->getPath(),
-            'ip'     => $request->getClientIp(),
-        ]);
-        // Keep configuration passwords out of the trace.
-        $handler->blacklist('_SERVER', 'DB_PASSWORD');
-        $handler->blacklist('_ENV', 'DB_PASSWORD');
-
-        return [$handler, 'text/html; charset=utf-8'];
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Core\Config;
 use App\Core\Http\Controller;
 use App\Models\Menu\MenuRepository;
+use PHPUnit\Framework\Exception;
 
 class WebController extends Controller {
     protected array $menuItems;
@@ -58,7 +59,7 @@ class WebController extends Controller {
             [
                 'icon'  => '⚑',
                 'title' => 'Logging and error pages',
-                'text'  => 'Monolog with daily rotation, Whoops in development and a clean error page in production. Global handlers for exceptions and fatals.',
+                'text'  => 'Monolog with daily rotation, Tracy (blue screen and debug bar) in development and a clean error page in production. Global handlers for exceptions and fatals.',
             ],
             [
                 'icon'  => '◱',

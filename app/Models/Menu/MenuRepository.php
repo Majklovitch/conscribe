@@ -1,12 +1,6 @@
 <?php
 
-<<<<<<<< HEAD:app/Models/Menu/MenuRepository.php
 namespace App\Models\Menu;
-========
-namespace App\Models\Repositories;
-
-use App\Models\MenuItem;
->>>>>>>> d77c72750a39fa698410a6019133648e5436ccd7:app/Models/Repositories/MenuRepository.php
 
 class MenuRepository {
     /**
@@ -17,6 +11,7 @@ class MenuRepository {
     public function __construct() {
         $this->add('Home', '/');
         $this->add("Test", '/test');
+        $this->add("KKt", "https://example.org/");
     }
 
     /**
@@ -99,6 +94,17 @@ class MenuRepository {
 
     public function isLinkActive(string $link): bool {
         if (str_starts_with($link, '/#') || str_starts_with($link, '#')) {
+            return false;
+        }
+
+        // Links pointing outside this web app are never active.
+        $host = parse_url($link, PHP_URL_HOST);
+        if ($host !== null && $host !== ($_SERVER['HTTP_HOST'] ?? null)) {
+            return false;
+        }
+
+        $scheme = parse_url($link, PHP_URL_SCHEME);
+        if ($scheme !== null && !in_array(strtolower($scheme), ['http', 'https'], true)) {
             return false;
         }
 

@@ -1,6 +1,6 @@
 # Conscribe PHP
 
-Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages (Whoops), an on-demand image resizing pipeline, and a module system for optional features (dunno if i would maintain it this way) — without a container, an ORM, or a compile step.
+Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, and a module system for optional features (dunno if i would maintain it this way) — without a container, an ORM, or a compile step.
 
 **Version 1.3.9** · Requires **PHP 8.4+**
 
@@ -41,16 +41,17 @@ Now enjoy AI readme :D
 8. [Response](#response)
 9. [Views & Layouts](#views--layouts)
 10. [Template Helpers](#template-helpers)
-11. [Images & Media Pipeline](#images--media-pipeline)
-12. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-13. [CSRF Protection](#csrf-protection)
-14. [Database Layer](#database-layer)
-15. [Logging & Error Handling](#logging--error-handling)
-16. [Modules](#modules)
-17. [Menu](#menu)
-18. [Tracking Codes](#tracking-codes)
-19. [Security Summary](#security-summary)
-20. [Deployment](#deployment)
+11. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+12. [Images & Media Pipeline](#images--media-pipeline)
+13. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+14. [CSRF Protection](#csrf-protection)
+15. [Database Layer](#database-layer)
+16. [Logging & Error Handling](#logging--error-handling)
+17. [Modules](#modules)
+18. [Menu](#menu)
+19. [Tracking Codes](#tracking-codes)
+20. [Security Summary](#security-summary)
+21. [Deployment](#deployment)
 
 ---
 
@@ -67,7 +68,7 @@ Now enjoy AI readme :D
 | **Session** | Lazy start (no cookie for visitors who never touch it), hardened cookie params, automatic ID rotation, flash messages, old form input, CSRF token |
 | **Security** | CSRF tokens with `hash_equals`, open-redirect protection, SVG sanitization, SQL identifier whitelisting, prepared statements, security response headers, hardened cache directory |
 | **Database** | Lazy PDO singleton, `Repository` base with CRUD/pagination/transactions, `Model` base with typed hydration, `ArrayAccess` and `JsonSerializable` |
-| **Logging** | Monolog behind PSR-3, daily rotating files, global handlers for exceptions/fatals/warnings, Whoops debug pages in development, never fatal on failure |
+| **Logging** | Monolog behind PSR-3, daily rotating files, global handlers for exceptions/fatals/warnings, Tracy blue screen and debug bar in development, an HTML dump per failure in both environments, never fatal on failure |
 | **Modules** | Drop-in folders under `app/Modules/` that can boot, rewrite the request, register routes, and load their own helpers |
 | **Tracking** | GA4, Google Tag, Google Ads, Seznam Sklik and Facebook Pixel rendered from config only when configured |
 | **Frontend** | Cookie Consent v3, Spotlight lightbox, accessible mobile navigation, skip link |
@@ -126,6 +127,10 @@ Now enjoy AI readme :D
 │       ├── test.php
 │       ├── components/            # Fragments rendered by component()
 │       └── layout/                # header.php, footer.php
+├── assets/                        # Asset sources (compiled into public/)
+│   ├── scss/                      # main.scss + partials
+│   └── js/                        # main.js
+├── bin/build.php                  # Asset build CLI
 ├── public/                        # Document root
 │   ├── css/  js/  img/  media/cache/
 │   ├── index.php                  # Front controller
@@ -209,6 +214,10 @@ return [
         'path'      => 'storage/logs/app.log', // relative to project root, or absolute
         'level'     => null,                   // null = debug in dev, warning in production
         'max_files' => 14,                     // daily rotation; 0 = keep everything
+                                               // also the age limit of the HTML dumps
+        'dumps'      => true,                  // Tracy blue screen of every uncaught
+                                               // exception/fatal saved next to the log
+        'dumps_path' => null,                  // null = storage/exceptions
         'stderr'    => false,                  // also write to stderr (docker logs)
     ],
     'session' => [
@@ -454,6 +463,78 @@ Reads from `public/img/icons/`, injects the file inline, merges your class into 
 
 ---
 
+## Asset Pipeline (SCSS & Minification)
+
+`public/css/style.css` and `public/js/main.js` are **build artifacts — never edit
+them directly.** Edit the sources under `assets/` and rebuild:
+
+```bash
+composer build
+```
+
+The pipeline is pure PHP (`scssphp/scssphp` + `matthiasmullie/minify`); there is
+no Node toolchain. The compiled output is committed to the repository, so
+deployment stays a plain checkout with no build step on the server.
+
+| Command | What it does |
+| --- | --- |
+| `composer build` | Compressed CSS, minified JS. This is what you commit. |
+| `composer build:dev` | Expanded CSS plus `public/css/style.css.map`, JS concatenated untouched. |
+| `composer build:watch` | Rebuilds whenever a file under `assets/` changes. |
+
+In development you rarely need any of them: `public/index.php` calls
+`AssetBuilder::fromConfig()->build(force: false)` on every request, which
+recompiles only when a source file is newer than its output. Production never
+runs that check — it is gated on `conscribe.environment`.
+
+### Layout
+
+```
+assets/scss/
+├── main.scss                # @import list; the order is the cascade order
+├── abstracts/               # $breakpoints, the mq() mixin
+├── base/                    # reset, design tokens, typography
+├── utilities/               # spacing and text helpers
+├── layout/                  # header, main, footer
+├── components/              # buttons, card, badge, table, form, ...
+├── pages/                   # per-page sections
+└── _a11y.scss               # :focus-visible, prefers-reduced-motion
+```
+
+Two rules when working in there:
+
+- **Design tokens stay CSS custom properties.** The `prefers-color-scheme: dark`
+  block in `base/_tokens.scss` overrides them through the cascade at runtime;
+  turning them into SCSS variables would resolve them at build time and break
+  dark mode. SCSS variables are for build-time values only, such as the
+  breakpoints in `abstracts/_variables.scss`.
+- **Responsive overrides live with their component**, via `@include mq(md)`, not
+  in one collected tail block.
+
+Note that scssphp does not implement Sass modules, so partials are pulled in with
+`@import`, not `@use`.
+
+### Keep the JavaScript ES5
+
+`matthiasmullie/minify` is a tokenizer, not a parser, and has no ES6+ awareness.
+Template literals, `?.`, `??` and some arrow-function positions can produce
+output that is valid syntax but wrong behaviour — and only in the production
+build. If you need modern syntax, set `assets.js.minify` to `false` in
+`app/Config/main.php`; shipping a few unminified kilobytes beats shipping a
+broken page. See `assets/js/README.md`.
+
+### Configuration
+
+The `assets` block in `app/Config/main.php` sets the source and output paths,
+`auto_compile` and `source_maps` (both development-only), and `js.minify`. Every
+key has a built-in default in `AssetBuilder::defaults()`, so an older deployed
+config that predates the block still builds correctly.
+
+Vendored assets (`cookieconsent.*`, `spotlight.bundle.js`) are outside the
+pipeline entirely — they are neither inputs nor outputs.
+
+---
+
 ## Images & Media Pipeline
 
 `image()` and `image_tag()` generate a resized, format-converted variant on first render and serve it from disk afterwards.
@@ -654,7 +735,7 @@ class Article extends Model
 
 Logging runs on [Monolog](https://github.com/Seldaek/monolog) behind the PSR-3 `LoggerInterface`, so application code never depends on Monolog directly.
 
-Files land in `storage/logs/app-YYYY-MM-DD.log` and rotate daily (`max_files`). If the directory is not writable or the logger cannot be built, it falls back to a `NullLogger` and reports the reason through `error_log()` — logging never takes the site down. Set `log.stderr` to also stream into `docker logs`.
+Files land in `storage/logs/app-YYYY-MM-DD.log` and rotate daily (`max_files`); the HTML dumps described below go to `storage/exceptions/`. If the directory is not writable or the logger cannot be built, it falls back to a `NullLogger` and reports the reason through `error_log()` — logging never takes the site down. Set `log.stderr` to also stream into `docker logs`.
 
 ```php
 use App\Core\Logging\Log;
@@ -678,11 +759,25 @@ Both the logger and the error controller are built **lazily** — a successful r
 
 5xx messages describe internals (class names, missing controllers) and the error template prints the message, so outside `development` the visitor gets one generic sentence while the detail stays in the log.
 
-### Whoops in development
+### Tracy in development
 
-When `conscribe.environment` is `development`, failures render through [Whoops](https://github.com/filp/whoops) with source excerpts, request data and a `Conscribe request` table (method, path, IP). The handler adapts to the caller: `PrettyPageHandler` for browsers, `JsonResponseHandler` for AJAX or `Accept: application/json`, `PlainTextHandler` on the CLI. `_SERVER`/`_ENV` password keys are blacklisted from the trace.
+When `conscribe.environment` is `development`, `App\Core\Logging\Debug` enables [Tracy](https://tracy.nette.org/): failures render as the **blue screen** with source excerpts and a full trace, and every HTML response carries the **debug bar** (time, memory, the request, plus a `Conscribe request` panel with method, path, IP and whether the call was AJAX). `dump()` and `bdump()` are available and land in the bar.
 
-Whoops runs purely as a **renderer** (`allowQuit(false)`, `writeToOutput(false)`) and never registers its own global handlers, so Monolog still records everything it displays. It is a `require-dev` package, so `composer install --no-dev` simply does not have it; the handler detects that and falls back to a plain-text trace. Production always gets the regular error page.
+Unlike a passive renderer, the bar needs Tracy's own output hook, so in development Tracy registers the error, exception and shutdown handlers and `ErrorHandler` steps aside. Logging does not go with them: Tracy hands an exception to its logger only when it *cannot* show the blue screen (CLI, AJAX) and a plain warning it merely counts in the bar, so `Debug` wraps Tracy's handlers — every exception, PHP error and fatal is written through `ErrorHandler::logException()` / `logPhpError()` / `logFatal()` first, then Tracy displays it. The message and context shape are therefore identical in both environments, and a failure Tracy reports twice (its own `Debugger::log()` plus the wrapped handler, bridged by `TracyMonologAdapter`) still produces one log line. Tracy writes no log files of its own (`$logDirectory` stays `null`), and `$strictMode` is left off, so a notice lands in the bar's warnings panel instead of replacing the page. Configuration passwords and tokens are hidden from the output by `Dump::configureBlueScreen()` (see below).
+
+### HTML dumps in both environments
+
+The bar and the blue screen are development-only, but the *page* is worth having in production, where the visitor sees one generic sentence and the log holds a message and a `getTraceAsString()` blob. `App\Core\Logging\Dump` therefore renders the same blue screen **to a file** for every uncaught exception and every fatal — `storage/exceptions/exception--Y-m-d--H-i--<hash>.html`, plus the Markdown transcript Tracy writes alongside it. They live in their own directory beside `storage/logs` (one file per failure would bury the log), created on the first failure and overridable with `log.dumps_path`. The file name goes into the record as the `dump` key, so a text line points at the page with the source, the whole trace and the variables:
+
+```
+[2026-08-31 18:00:11] conscribe.CRITICAL: Uncaught RuntimeException: boom {"class":"RuntimeException", ...,"dump":"exception--2026-08-31--18-00--dfb73b4ba0.html"}
+```
+
+The hash comes from the trace, so the same failure repeating a thousand times reuses one file. Warnings and notices stay text-only. Dumps expire with `log.max_files` days, swept at most once a day, and the whole feature is switched off with `'dumps' => false`; when the directory is missing or unwritable, the dump is silently skipped and the error page renders as usual — a dump that cannot be written must never turn a handled failure into a second one.
+
+Because dumps are written in production too, `tracy/tracy` is a **runtime** dependency (`require`, not `require-dev`), and secret masking lives in `Dump::configureBlueScreen()` rather than in `Debug` — `Debug` never runs in production, and a dump that printed `$_ENV['DB_PASSWORD']` in full would be worse than no dump at all. Keys such as `DB_PASSWORD`, `secret` and `token` are hidden on both `Debugger::$keysToHide` and the blue screen's own `keysToHide`, on top of Tracy's defaults.
+
+**A dump is source code and variables.** `storage/` sits outside the document root and `storage/.htaccess` denies everything, but on any deployment where the log directory could be served, move it (`log.dumps_path`) or turn dumps off.
 
 ### Swapping the logger
 
@@ -788,7 +883,7 @@ The front end also ships **Cookie Consent v3** (`public/js/cookieconsent.umd.js`
 | Referrer leakage | `Referrer-Policy: strict-origin-when-cross-origin` |
 | Device APIs | `Permissions-Policy: geolocation=(), camera=(), microphone=()` |
 | Code execution in uploads/cache | `public/media/cache/.htaccess` disables the PHP engine and denies script extensions |
-| Information disclosure | Generic 5xx text in production; internals only in the log; Whoops absent from `--no-dev` installs; `Options -Indexes` |
+| Information disclosure | Generic 5xx text in production; internals only in the log; secrets masked in the Tracy dumps; `storage/.htaccess` denies all; `Options -Indexes` |
 
 ---
 
@@ -798,7 +893,7 @@ The front end also ships **Cookie Consent v3** (`public/js/cookieconsent.umd.js`
 composer install --no-dev --optimize-autoloader
 ```
 
-Always install without dev dependencies in production, and keep OPcache on. The dev packages (PHPUnit, PHPStan, PHP-CS-Fixer, Whoops, VarDumper) add roughly 3 000 entries to the generated classmap and several unconditional `files` autoload entries, costing about 15 ms per request when OPcache is disabled. With OPcache enabled the difference disappears.
+Always install without dev dependencies in production, and keep OPcache on. The dev packages (PHPUnit, PHPStan, PHP-CS-Fixer, VarDumper) add roughly 3 000 entries to the generated classmap and several unconditional `files` autoload entries, costing about 15 ms per request when OPcache is disabled. With OPcache enabled the difference disappears.
 
 Deployment checklist:
 
@@ -813,4 +908,4 @@ Deployment checklist:
 
 ## Credits
 
-Conscribe PHP — by **Majklovitch**. Built on [Monolog](https://github.com/Seldaek/monolog), [PHPMailer](https://github.com/PHPMailer/PHPMailer), [Whoops](https://github.com/filp/whoops), [Cookie Consent](https://cookieconsent.orestbida.com/) and [Spotlight.js](https://github.com/nextapps-de/spotlight).
+Conscribe PHP — by **Majklovitch**. Built on [Monolog](https://github.com/Seldaek/monolog), [PHPMailer](https://github.com/PHPMailer/PHPMailer), [Tracy](https://tracy.nette.org/), [Cookie Consent](https://cookieconsent.orestbida.com/) and [Spotlight.js](https://github.com/nextapps-de/spotlight).

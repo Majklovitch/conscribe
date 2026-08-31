@@ -1,8 +1,5 @@
 <?php
     $pageTitle = $pageTitle ?? "Page";
-    if(http_response_code() === 404) {
-        $pageTitle = $pageTitle ?? 'Page not found';
-    }
     $pageDescription = $pageDescription ?? 'A lightweight PHP MVC framework with routing, templates, CSRF, a database layer, logging and an image pipeline.';
     $menuItems = $menuItems ?? [];
 ?>

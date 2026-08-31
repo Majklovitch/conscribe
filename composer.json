@@ -22,7 +22,10 @@
         "ext-pdo": "*",
         "ext-gd": "*",
         "phpmailer/phpmailer": "^7.1",
-        "monolog/monolog": "^3.10"
+        "monolog/monolog": "^3.10",
+        "tracy/tracy": "^2.10",
+        "scssphp/scssphp": "^2.0",
+        "matthiasmullie/minify": "^1.3"
     },
     "suggest": {
         "ext-imagick": "Preferred image driver for MediaService; GD is used as a fallback.",
@@ -32,13 +35,20 @@
         "optimize-autoloader": true
     },
     "scripts": {
+        "build": "php bin/build.php --env=production",
+        "build:dev": "php bin/build.php --env=development",
+        "build:watch": "php bin/build.php --env=development --watch",
         "lint": "php bin/lint.php"
+    },
+    "scripts-descriptions": {
+        "build": "Compile SCSS and minify JS into public/ (production output).",
+        "build:dev": "Compile assets with expanded CSS and a source map.",
+        "build:watch": "Rebuild assets whenever a file under assets/ changes."
     },
     "require-dev": {
         "phpstan/phpstan": "*",
         "phpunit/phpunit": "*",
         "friendsofphp/php-cs-fixer": "*",
-        "filp/whoops": "*",
         "symfony/var-dumper": "*"
     }
 }

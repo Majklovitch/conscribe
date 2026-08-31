@@ -1,0 +1,14 @@
+// scssphp does not implement Sass modules (@use / sass:map), so the legacy
+// global map functions and @import are what this project can rely on.
+
+// Max-width media query by breakpoint name, so component partials can carry
+// their own responsive overrides instead of collecting them in one tail block.
+@mixin mq($name) {
+    @if not map-has-key($breakpoints, $name) {
+        @error 'Unknown breakpoint "#{$name}".';
+    }
+
+    @media (max-width: map-get($breakpoints, $name)) {
+        @content;
+    }
+}

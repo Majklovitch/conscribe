@@ -1,0 +1,95 @@
+.skip-link {
+    position: absolute;
+    left: var(--space-sm);
+    top: -4rem;
+    z-index: 200;
+    padding: 0.6rem 1rem;
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+    transition: top 0.2s ease;
+}
+.skip-link:focus { top: var(--space-sm); }
+
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border);
+}
+.site-header__inner {
+    max-width: var(--content-width);
+    margin: 0 auto;
+    padding: 0.85rem var(--space-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+}
+.site-logo {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+}
+.site-logo img {
+    width: auto;
+    height: 2rem;
+}
+@media (prefers-color-scheme: dark) {
+    /* The logotype has black text; in dark mode invert it to light */
+    .site-logo img { filter: invert(1) hue-rotate(180deg); }
+}
+
+.nav-toggle {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.7rem;
+    cursor: pointer;
+}
+
+.site-nav ul {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    list-style: none;
+}
+.site-nav a {
+    display: block;
+    text-decoration: none;
+    color: var(--color-muted);
+    font-weight: 500;
+    padding: 0.45rem 0.9rem;
+    border-radius: var(--radius-full);
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+.site-nav a:hover { color: var(--color-text); background: var(--color-bg-alt); }
+.site-nav a.active {
+    color: var(--color-primary-strong);
+    background: var(--color-primary-soft);
+    font-weight: 600;
+}
+
+// Below the breakpoint the horizontal nav becomes a toggled stack; the button
+// that drives it is `[data-nav-toggle]` in assets/js/main.js.
+@include mq(md) {
+    .nav-toggle { display: inline-flex; }
+    .site-nav {
+        display: none;
+        width: 100%;
+        order: 3;
+    }
+    .site-nav.is-open { display: block; }
+    .site-nav ul {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-2xs);
+        padding-block: var(--space-xs);
+    }
+    .site-nav a { border-radius: var(--radius-sm); }
+    .site-header__inner { flex-wrap: wrap; }
+}

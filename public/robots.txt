@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Absolute URL required by the spec; keep in sync with conscribe.base_url.
+Sitemap: http://localhost:8080/sitemap.xml

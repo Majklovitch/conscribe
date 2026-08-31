@@ -2,11 +2,22 @@
 
 return [
     'conscribe' => [
-        'ver' => '1.3.9', // version of the framework, not your app
+        'ver' => '1.4.0', // version of the framework, not your app
         'author' => 'Majklovitch', // make this whatever you want, i dont mind if you copy code
         'environment' => 'development', // 'development' | 'production'
         'base_url' => 'http://localhost:8080/', // the base URL of your site, used for generating absolute URLs
+                                               // and for the <loc> entries in /sitemap.xml
     ],
+    // sitemap.xml is generated from the route table - there is nothing to configure
+    // here. Which pages are listed is decided by the route file (app/Config/routes/),
+    // and a route may override its group:
+    //
+    //   $router->get('secret', $h, ['sitemap' => false]);
+    //   $router->get('', $h, ['sitemap' => ['changefreq' => 'daily', 'priority' => 1.0]]);
+    //   $router->get('clanek/{slug}', $h, ['sitemap' => ['provider' => fn () => $repo->slugs()]]);
+    //
+    // A provider returns rows of parameter values (['slug' => 'hello']) or ready
+    // App\Services\Sitemap\SitemapUrl objects when it can supply a lastmod.
     'modules' => [ // list of modules to load, in order
         'LanguageMutations',
     ],
@@ -22,14 +33,35 @@ return [
             'card'  => [600, 400],
         ],
     ],
+    'assets' => [
+        'auto_compile' => true,             // development only - recompile when a source file is newer
+        'source_maps'  => true,             // development only - emit public/css/style.css.map
+        'scss' => [
+            'entry'  => 'assets/scss/main.scss',  // paths are relative to the project root
+            'watch'  => 'assets/scss',            // scanned for staleness
+            'output' => 'public/css/style.css',
+        ],
+        'js' => [
+            'sources' => ['assets/js/main.js'],   // concatenated in this order
+            'watch'   => 'assets/js',
+            'output'  => 'public/js/main.js',
+            'minify'  => true,              // false ships concatenated sources, see assets/js/README.md
+        ],
+    ],
     'log' => [
-        'enabled'   => true,
-        'name'      => 'conscribe',        // channel name in the log line
-        'path'      => 'storage/logs/app.log', // relative to project root, or absolute
-        'level'     => null,               // null = debug in development, warning in production
-                                           // 'debug'|'info'|'notice'|'warning'|'error'|'critical'|'alert'|'emergency'
-        'max_files' => 14,                 // rotated daily; 0 = keep everything
-        'stderr'    => false,              // true = also write to stderr (visible in `docker logs`)
+        'enabled'    => true,
+        'name'       => 'conscribe',        // channel name in the log line
+        'path'       => 'storage/logs/app.log', // relative to project root, or absolute
+        'level'      => null,               // null = debug in development, warning in production
+                                            // 'debug'|'info'|'notice'|'warning'|'error'|'critical'|'alert'|'emergency'
+        'max_files'  => 14,                 // rotated daily; 0 = keep everything
+                                            // also the age limit of the dumps below
+        'dumps'      => true,               // save the Tracy blue screen of every uncaught
+                                            // exception and fatal as an .html file
+        'dumps_path' => null,               // null = storage/exceptions (beside the log directory);
+                                            // relative to the project root, or absolute.
+                                            // Must not be web-reachable.
+        'stderr'     => false,              // true = also write to stderr (visible in `docker logs`)
     ],
     'session' => [
         'name'                => 'CONSCRIBEID', // cookie name; PHPSESSID advertises the stack

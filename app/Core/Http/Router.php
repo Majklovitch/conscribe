@@ -3,6 +3,8 @@ namespace App\Core\Http;
 
 use App\Core\Template\ViewNotFoundException;
 use ReflectionException;
+use ReflectionFunction;
+use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use ReflectionNamedType;
 
@@ -12,6 +14,12 @@ class Router {
         'GET'  => [],
         'POST' => [],
     ];
+
+    /**
+     * Options applied to every route registered inside the current group().
+     * Empty outside a group, so a plain get() behaves exactly as before.
+     */
+    private array $routeDefaults = [];
 
     /**
      * Error handler: fn(int $code, string $message, Request $request): Response
@@ -30,12 +38,66 @@ class Router {
         $this->session = $session ?? Session::instance();
     }
 
-    public function get(string $url, array $handler): void {
-        $this->addRoute('GET', $url, $handler);
+    /**
+     * @param array|callable $handler [ControllerClass::class, 'method'] or a callable
+     * @param array          $options route metadata, e.g. ['sitemap' => false]
+     */
+    public function get(string $url, array|callable $handler, array $options = []): void {
+        $this->addRoute('GET', $url, $handler, $options);
     }
 
-    public function post(string $url, array $handler): void {
-        $this->addRoute('POST', $url, $handler);
+    public function post(string $url, array|callable $handler, array $options = []): void {
+        $this->addRoute('POST', $url, $handler, $options);
+    }
+
+    /**
+     * Registers a block of routes sharing the same options.
+     *
+     * It is what separates public pages from the rest: the route file decides
+     * the policy once, instead of every line repeating it. Options given on the
+     * route itself still win, so a single page can opt out of its own group.
+     *
+     *   $router->group(['sitemap' => false], function (Router $router) {
+     *       require __DIR__ . '/routes/admin.php';
+     *   });
+     *
+     * @param callable(self): void $register
+     */
+    public function group(array $defaults, callable $register): void {
+        $previous = $this->routeDefaults;
+        $this->routeDefaults = array_merge($previous, $defaults);
+
+        try {
+            $register($this);
+        } finally {
+            // Restored even when a route file throws, so one broken group does
+            // not leak its defaults onto everything registered afterwards.
+            $this->routeDefaults = $previous;
+        }
+    }
+
+    /**
+     * GET routes eligible for the sitemap, in registration order.
+     *
+     * POST is never considered - a form target is not a page. The router only
+     * reports what it knows (the URL template and the metadata); turning that
+     * into XML is the sitemap service's job.
+     *
+     * @return array<int, array{url: string, sitemap: mixed}>
+     */
+    public function sitemapRoutes(): array {
+        $eligible = [];
+
+        foreach ($this->routes['GET'] as $route) {
+            $sitemap = $route['options']['sitemap'] ?? null;
+            if ($sitemap === false) {
+                continue;
+            }
+
+            $eligible[] = ['url' => $route['url'], 'sitemap' => $sitemap];
+        }
+
+        return $eligible;
     }
 
     /**
@@ -47,9 +109,9 @@ class Router {
         $this->errorHandler = $handler;
     }
 
-    private function addRoute(string $method, string $url, array $handler): void {
-        if (!isset($handler[0], $handler[1]) || !is_string($handler[0]) || !is_string($handler[1])) {
-            throw new \InvalidArgumentException("Route '{$url}' must be registered as [ControllerClass::class, 'method'].");
+    private function addRoute(string $method, string $url, array|callable $handler, array $options = []): void {
+        if (is_array($handler) && (!isset($handler[0], $handler[1]) || !is_string($handler[0]) || !is_string($handler[1]))) {
+            throw new \InvalidArgumentException("Route '{$url}' must be registered as [ControllerClass::class, 'method'] or a callable.");
         }
 
         // Normalize the URL first and only then build the regex from it -
@@ -60,10 +122,32 @@ class Router {
         $pattern = preg_replace('/\{([a-zA-Z0-9_]+)\}/', '(?P<$1>[^/]+)', $url);
 
         $this->routes[strtoupper($method)][] = [
-            'pattern'    => '#^' . $pattern . '$#D',
-            'controller' => $handler[0],
-            'action'     => $handler[1],
+            'pattern' => '#^' . $pattern . '$#D',
+            'handler' => $handler,
+            // The template is kept alongside the compiled regex: the sitemap
+            // needs the readable URL back, and a regex cannot be un-compiled.
+            'url'     => $url,
+            'options' => $this->mergeOptions($this->routeDefaults, $options),
         ];
+    }
+
+    /**
+     * Route options over group defaults.
+     *
+     * One level deep, so a route refining a single setting keeps the rest of
+     * its group: ['sitemap' => ['priority' => 1.0]] inside a group that sets
+     * changefreq keeps that changefreq. Replacing the whole value would make
+     * the shorthand quietly lose settings the author never mentioned. A scalar
+     * still replaces outright, which is what ['sitemap' => false] needs.
+     */
+    private function mergeOptions(array $defaults, array $options): array {
+        foreach ($options as $key => $value) {
+            $defaults[$key] = is_array($value) && is_array($defaults[$key] ?? null)
+                ? $value + $defaults[$key]
+                : $value;
+        }
+
+        return $defaults;
     }
 
     public function run(?Request $request = null): void {
@@ -102,7 +186,7 @@ class Router {
                 // Named parameters only; the numeric indexes from preg_match are dropped.
                 $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
 
-                return $this->execute($route['controller'], $route['action'], $params, $request);
+                return $this->execute($route['handler'], $params, $request);
             }
         }
 
@@ -143,27 +227,50 @@ class Router {
         return $allowed;
     }
 
-    private function execute(string $controllerClass, string $actionName, array $params, Request $request): Response {
-        if (!class_exists($controllerClass)) {
-            return $this->error(500, "Controller {$controllerClass} not found.", $request);
-        }
+    private function execute(array|callable $handler, array $params, Request $request): Response {
+        if (is_array($handler)) {
+            [$controllerClass, $actionName] = $handler;
 
-        $controller = new $controllerClass();
-        if (method_exists($controller, 'setRequest')) {
-            $controller->setRequest($request);
-        }
-        if (method_exists($controller, 'setSession')) {
-            $controller->setSession($this->session);
-        }
+            if (!class_exists($controllerClass)) {
+                return $this->error(500, "Controller {$controllerClass} not found.", $request);
+            }
 
-        // Only a public method declared directly on this controller may be called.
-        try {
-            $ref = new ReflectionMethod($controller, $actionName);
-            if (!$ref->isPublic() || $ref->getDeclaringClass()->getName() !== get_class($controller)) {
+            $controller = new $controllerClass();
+            if (method_exists($controller, 'setRequest')) {
+                $controller->setRequest($request);
+            }
+            if (method_exists($controller, 'setSession')) {
+                $controller->setSession($this->session);
+            }
+
+            // Only a public method declared directly on this controller may be called.
+            try {
+                $ref = new ReflectionMethod($controller, $actionName);
+                if (!$ref->isPublic() || $ref->getDeclaringClass()->getName() !== get_class($controller)) {
+                    return $this->error(404, 'Page not found.', $request);
+                }
+            } catch (ReflectionException) {
                 return $this->error(404, 'Page not found.', $request);
             }
-        } catch (ReflectionException) {
-            return $this->error(404, 'Page not found.', $request);
+
+            $invoke = static fn (array $args): mixed => $ref->invokeArgs($controller, $args);
+            $label = $controllerClass . '::' . $actionName;
+        } else {
+            // A callable handler is already a built object, so there is nothing
+            // to construct and no declaring class to check - the two guards
+            // above only make sense for controllers resolved from a class name.
+            // This is what lets a service needing constructor arguments be a
+            // route, the same way setErrorHandler() takes a plain callable.
+            try {
+                $ref = is_object($handler) && !$handler instanceof \Closure
+                    ? new ReflectionMethod($handler, '__invoke')
+                    : new ReflectionFunction($handler);
+            } catch (ReflectionException) {
+                return $this->error(500, 'Route handler is not callable.', $request);
+            }
+
+            $invoke = static fn (array $args): mixed => $handler(...$args);
+            $label = is_object($handler) ? get_class($handler) : 'callable';
         }
 
         $args = $this->buildArguments($ref, $params, $request);
@@ -174,7 +281,7 @@ class Router {
         }
 
         try {
-            $result = $ref->invokeArgs($controller, $args);
+            $result = $invoke($args);
         } catch (ViewNotFoundException) {
             return $this->error(404, 'Page not found.', $request);
         }
@@ -191,12 +298,7 @@ class Router {
         // nothing reports. Better a 500, so it shows up in the log.
         return $this->error(
             500,
-            sprintf(
-                'Action %s::%s must return a Response or string, got %s.',
-                $controllerClass,
-                $actionName,
-                get_debug_type($result)
-            ),
+            sprintf('Action %s must return a Response or string, got %s.', $label, get_debug_type($result)),
             $request
         );
     }
@@ -208,7 +310,7 @@ class Router {
      *
      * @return array<int, mixed>|null
      */
-    private function buildArguments(ReflectionMethod $ref, array $params, Request $request): ?array {
+    private function buildArguments(ReflectionFunctionAbstract $ref, array $params, Request $request): ?array {
         $args = [];
 
         foreach ($ref->getParameters() as $param) {

@@ -1,0 +1,6 @@
+# The compiled assets are committed, so pin them to LF: a Windows build and a
+# Linux build of the same sources must produce the same bytes.
+public/css/style.css text eol=lf
+public/js/main.js    text eol=lf
+assets/**/*.scss     text eol=lf
+assets/**/*.js       text eol=lf

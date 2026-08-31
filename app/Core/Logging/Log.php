@@ -79,25 +79,40 @@ class Log {
     }
 
     /**
+     * The directory the log lives in. Tracy's HTML dumps are written next to
+     * it, so they share its retention and its deployment.
+     */
+    public static function directory(): string {
+        return dirname(self::resolvePath());
+    }
+
+    /**
      * Target file. A relative path from the configuration is resolved against
      * the project root.
      */
     private static function resolvePath(): string {
-        $root = dirname(__DIR__, 3);
         $path = Config::get('log.path');
 
         if (!is_string($path) || trim($path) === '') {
-            return $root . '/storage/logs/app.log';
+            return dirname(__DIR__, 3) . '/storage/logs/app.log';
         }
 
+        return self::resolve($path);
+    }
+
+    /**
+     * Resolves a configured path against the project root. An absolute path
+     * (Unix style as well as 'C:/...') is taken as it is. Shared with Dump,
+     * which resolves 'log.dumps_path' the same way.
+     */
+    public static function resolve(string $path): string {
         $path = str_replace('\\', '/', trim($path));
 
-        // An absolute path (Unix style as well as 'C:/...') is taken as it is.
         if (str_starts_with($path, '/') || preg_match('#^[a-zA-Z]:/#', $path) === 1) {
-            return $path;
+            return rtrim($path, '/');
         }
 
-        return $root . '/' . ltrim($path, '/');
+        return dirname(__DIR__, 3) . '/' . rtrim(ltrim($path, '/'), '/');
     }
 
     /**

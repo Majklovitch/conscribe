@@ -1,0 +1,31 @@
+// ConscribePHP - stylesheet entry point.
+// Compiled to public/css/style.css by App\Services\Assets\AssetBuilder.
+// The @import order is the cascade order; do not reorder casually.
+//
+// @import rather than @use because scssphp does not implement Sass modules.
+
+@import 'abstracts/variables';
+@import 'abstracts/mixins';
+
+@import 'base/reset';
+@import 'base/tokens';
+@import 'base/typography';
+
+@import 'utilities/spacing';
+@import 'utilities/text';
+
+@import 'components/buttons';
+@import 'components/badge';
+@import 'components/card';
+@import 'components/code-block';
+@import 'components/spotlight';
+
+@import 'layout/header';
+@import 'layout/main';
+@import 'layout/footer';
+
+@import 'pages/home';
+@import 'components/form';
+@import 'components/table';
+
+@import 'a11y';

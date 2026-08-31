@@ -1,0 +1,7 @@
+// Build-time values only. Everything that has to stay resolvable at runtime
+// (colours, spacing, radii) lives as a CSS custom property in base/_tokens.scss,
+// because the prefers-color-scheme block overrides those through the cascade.
+
+$breakpoints: (
+    'md': 48rem,
+);

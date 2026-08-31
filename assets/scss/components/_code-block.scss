@@ -1,0 +1,12 @@
+.code-block {
+    background: var(--color-code-bg);
+    color: var(--color-code-text);
+    border-radius: var(--radius);
+    padding: var(--space-md);
+    overflow-x: auto;
+    width: 100%;
+    line-height: 1.7;
+    tab-size: 4;
+}
+.code-block .c-comment { color: #6f8a84; }
+.code-block .c-key { color: var(--color-accent-light); }

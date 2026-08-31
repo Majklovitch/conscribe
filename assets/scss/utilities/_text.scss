@@ -1,0 +1,16 @@
+.text-sm { font-size: 0.875rem; }
+.text-lg { font-size: 1.125rem; }
+.text-4xl { font-size: clamp(3rem, 2rem + 4vw, 5rem); }
+.color-primary { color: var(--color-primary); }
+.color-muted { color: var(--color-muted); }
+.measure { max-width: 62ch; }
+.full-width { width: 100%; }
+
+.visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
