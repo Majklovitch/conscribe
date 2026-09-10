@@ -16,7 +16,7 @@ declare(strict_types=1);
  */
 
 $finder = PhpCsFixer\Finder::create()
-    // Every directory bin/lint.php checks, plus the fixer's own config, so no
+    // Every directory `tty lint` checks, plus the fixer's own config, so no
     // PHP file in the project is outside the style it declares.
     ->in([__DIR__ . '/app', __DIR__ . '/bin', __DIR__ . '/public', __DIR__ . '/tests'])
     ->append([__FILE__])

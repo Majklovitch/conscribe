@@ -66,9 +66,14 @@ final class LintCommand extends Command {
                 continue;
             }
 
+            $extension = strtolower($file->getExtension());
+
             // The console entry point has no extension, the way `artisan` and
-            // `bin/console` have none; checking only *.php would skip it.
-            if (strtolower($file->getExtension()) === 'php' || $this->isPhpScript($file->getPathname())) {
+            // `bin/console` have none, so checking only *.php would skip it.
+            // Only extensionless files are sniffed: public/media/cache fills up
+            // with generated images, and opening every one of them to look for
+            // a shebang would make the check slower the longer the site runs.
+            if ($extension === 'php' || ($extension === '' && $this->isPhpScript($file->getPathname()))) {
                 yield $file->getPathname();
             }
         }
