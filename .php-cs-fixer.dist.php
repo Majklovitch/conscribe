@@ -16,7 +16,10 @@ declare(strict_types=1);
  */
 
 $finder = PhpCsFixer\Finder::create()
-    ->in([__DIR__ . '/app', __DIR__ . '/bin', __DIR__ . '/tests'])
+    // Every directory bin/lint.php checks, plus the fixer's own config, so no
+    // PHP file in the project is outside the style it declares.
+    ->in([__DIR__ . '/app', __DIR__ . '/bin', __DIR__ . '/public', __DIR__ . '/tests'])
+    ->append([__FILE__])
     // Templates, not classes: they are HTML with PHP tags, and the fixer's
     // idea of statement formatting does them no favours.
     ->exclude('Views')

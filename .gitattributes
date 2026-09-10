@@ -1,6 +1,24 @@
-# The compiled assets are committed, so pin them to LF: a Windows build and a
-# Linux build of the same sources must produce the same bytes.
-public/css/style.css text eol=lf
-public/js/main.js    text eol=lf
-assets/**/*.scss     text eol=lf
-assets/**/*.js       text eol=lf
+# Line endings.
+#
+# The repository stores LF. Without this file, core.autocrlf=true checks PHP
+# out as CRLF on Windows, php-cs-fixer rewrites it back to LF, and every run
+# after a checkout or a merge reports dozens of files as needing a fix that
+# git then normalizes away - which makes `composer fix:check` useless as a
+# check. Pinning the working-tree ending keeps the two tools agreeing.
+* text=auto
+
+*.php    text eol=lf
+*.neon   text eol=lf
+*.xml    text eol=lf
+*.json   text eol=lf
+*.md     text eol=lf
+*.scss   text eol=lf
+*.js     text eol=lf
+*.yml    text eol=lf
+
+*.png    binary
+*.jpg    binary
+*.webp   binary
+*.ico    binary
+*.woff   binary
+*.woff2  binary
