@@ -36,26 +36,27 @@ Now enjoy AI readme :D
 3. [Installation](#installation)
 4. [Configuration](#configuration)
 5. [Container](#container)
-6. [Migrations](#migrations)
-7. [Console](#console)
-8. [Middleware](#middleware)
-9. [Routing](#routing)
-10. [Controllers](#controllers)
-11. [Request](#request)
-12. [Response](#response)
-13. [Views & Layouts](#views--layouts)
-14. [Template Helpers](#template-helpers)
-15. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
-16. [Images & Media Pipeline](#images--media-pipeline)
-17. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-18. [CSRF Protection](#csrf-protection)
-19. [Database Layer](#database-layer)
-20. [Logging & Error Handling](#logging--error-handling)
-21. [Modules](#modules)
-22. [Menu](#menu)
-23. [Tracking Codes](#tracking-codes)
-24. [Security Summary](#security-summary)
-25. [Deployment](#deployment)
+6. [Validation](#validation)
+7. [Migrations](#migrations)
+8. [Console](#console)
+9. [Middleware](#middleware)
+10. [Routing](#routing)
+11. [Controllers](#controllers)
+12. [Request](#request)
+13. [Response](#response)
+14. [Views & Layouts](#views--layouts)
+15. [Template Helpers](#template-helpers)
+16. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+17. [Images & Media Pipeline](#images--media-pipeline)
+18. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+19. [CSRF Protection](#csrf-protection)
+20. [Database Layer](#database-layer)
+21. [Logging & Error Handling](#logging--error-handling)
+22. [Modules](#modules)
+23. [Menu](#menu)
+24. [Tracking Codes](#tracking-codes)
+25. [Security Summary](#security-summary)
+26. [Deployment](#deployment)
 
 ---
 
@@ -66,6 +67,7 @@ Now enjoy AI readme :D
 | **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
 | **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures; constructor dependencies autowired |
 | **Container** | PSR-11, autowiring by constructor reflection, shared entries by default, `make()` for fresh ones, cycles reported as the chain that caused them |
+| **Validation** | Rule-based (`required|email|max:255`), closure rules, one message per field, custom messages; the router turns a failure into a redirect back with old input, or 422 JSON |
 | **Migrations** | Timestamped PHP migration files, batches, `migrate` / `migrate:rollback` / `migrate:status` / `make:migration`, drift detection |
 | **Console** | `php tty` with autowired commands, `list`/`help`, did-you-mean on a typo, colour that turns itself off in a pipe, modules can add their own |
 | **Middleware** | Global and per-route/per-group pipeline, request rewriting, short-circuiting, class names resolved through the container |
@@ -324,6 +326,83 @@ instead of a fatal.
 
 The router works without a container — `new Router()` still constructs
 controllers with `new` — so nothing that existed before this needs changing.
+
+
+## Validation
+
+```php
+public function send(): Response {
+    $data = $this->validate([
+        'email'   => 'required|email|max:255',
+        'message' => 'required|min:10',
+        'website' => 'nullable|url',
+        'agree'   => 'accepted',
+    ]);
+
+    $this->messages->store($data);
+
+    return $this->redirect('/kontakt?sent=1');
+}
+```
+
+`validate()` throws on failure, so an action validates on its first line and
+then writes the happy path straight through. **It returns only the fields you
+asked for**, so what comes back can go to a repository without a second pass to
+drop whatever else the form posted.
+
+**The router decides the shape of a failure.** A browser gets its input and the
+messages flashed and is redirected back to the page it came from (303, so the
+browser follows with GET). Anything that wants JSON — `Accept: application/json`
+without `text/html`, an XHR, or a JSON body — gets `422` instead:
+
+```json
+{ "message": "The given data was invalid.", "errors": { "email": ["The email must be a valid email address."] } }
+```
+
+The `Referer` is attacker-controllable, so it is checked before it is followed; a
+forged one degrades to the home page.
+
+**Redisplaying** uses the helpers the framework already had, plus three new ones:
+
+```php
+<input name="email" value="<?= esc(old('email')) ?>">
+<?php if (has_error('email')): ?>
+    <p class="error"><?= esc(error('email')) ?></p>
+<?php endif ?>
+```
+
+**Rules.** `required`, `nullable`, `sometimes`, `string`, `int`, `numeric`,
+`bool`, `array`, `email`, `url`, `date`, `alpha`, `alpha_num`, `alpha_dash`,
+`min`, `max`, `between`, `in`, `not_in`, `regex`, `same`, `different`,
+`confirmed`, `accepted`. Write them pipe-separated, or as an array when an
+argument contains a pipe — as a regex often does:
+
+```php
+'code' => ['required', 'regex:/^[A-Z]{2}:\d+$/'],
+```
+
+`nullable` lets an untouched optional input through (it posts `''`, which
+`email` would otherwise reject); `sometimes` skips a field that was not sent at
+all, which is what a `PATCH` needs. **`0` counts as a value, not an absence** —
+a required quantity of zero must not read as "you forgot this".
+
+`min`/`max`/`between` measure what the value is: a number's value, a string's
+length, an array's count — and the message says so ("at least 8 characters" for
+a password, "at least 18" for an age).
+
+**Only the first failure of a field is reported.** Telling someone that their
+empty box is also not a valid email helps nobody.
+
+**Closure rules** get the value and the whole input, and may return their own
+message:
+
+```php
+'slug' => ['required', fn ($value) => $repo->free($value) ?: 'That slug is taken.'],
+'end'  => [fn ($value, array $data) => $value > $data['start']],
+```
+
+**Custom messages** are keyed `field.rule` or just `rule`; `Messages::override()`
+replaces the built-in wording wholesale, which is where a translation goes.
 
 
 ## Migrations

@@ -7,6 +7,7 @@ use App\Core\Http\Middleware\MiddlewareException;
 use App\Core\Http\Middleware\MiddlewareInterface;
 use App\Core\Http\Middleware\Pipeline;
 use App\Core\Template\ViewNotFoundException;
+use App\Core\Validation\ValidationException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
 use ReflectionFunction;
@@ -497,6 +498,8 @@ class Router {
             $result = $invoke($args);
         } catch (ViewNotFoundException) {
             return $this->error(404, 'Page not found.', $request);
+        } catch (ValidationException $e) {
+            return $this->validationFailed($e, $request);
         } catch (CsrfException $e) {
             // Thrown by check_csrf() on a route that opted out of the automatic
             // verification and does the check itself.
@@ -593,6 +596,71 @@ class Router {
             'bool'  => filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE),
             default => $value,
         };
+    }
+
+    /**
+     * Turns a failed validation into a response.
+     *
+     * Two shapes, because two kinds of client ask. Something that wants JSON
+     * gets 422 with the messages, which is what a form in the browser or an API
+     * consumer can act on. Anything else is a browser posting a form, so the
+     * errors and the submitted values are flashed and the visitor is sent back
+     * to the page they came from, where old() and errors() redisplay it.
+     *
+     * The referer is only followed when it is this site: an attacker-supplied
+     * Referer would otherwise turn every invalid form into an open redirect.
+     */
+    private function validationFailed(ValidationException $e, Request $request): Response {
+        if ($this->wantsJson($request)) {
+            return Response::json([
+                'message' => $e->getMessage(),
+                'errors' => $e->errors()->messages(),
+            ], 422);
+        }
+
+        $this->session->flash('errors', $e->errors()->messages());
+        $this->session->flashInput($request->getBodyParams());
+
+        return Response::redirect($this->backTo($request), 303);
+    }
+
+    private function wantsJson(Request $request): bool {
+        if ($request->isAjax()) {
+            return true;
+        }
+
+        $accept = strtolower($request->getHeader('accept') ?? '');
+
+        // `application/json` before `text/html` in the Accept header is the
+        // clearest statement a client can make; a browser navigating always
+        // asks for HTML first.
+        if (str_contains($accept, 'application/json') && !str_contains($accept, 'text/html')) {
+            return true;
+        }
+
+        return str_contains(strtolower($request->getHeader('content-type') ?? ''), 'application/json');
+    }
+
+    /**
+     * Where to send a browser back to after a failed form.
+     *
+     * The Referer is attacker-controllable, so it is checked before it is used.
+     * sanitizeRedirectUrl() refuses anything leaving the site - but it refuses
+     * by throwing, and a forged header must degrade to the home page rather
+     * than turn every invalid form into a 500.
+     */
+    private function backTo(Request $request): string {
+        $referer = $request->getHeader('referer');
+
+        if ($referer === null || $referer === '') {
+            return '/';
+        }
+
+        try {
+            return Response::sanitizeRedirectUrl($referer);
+        } catch (\InvalidArgumentException) {
+            return '/';
+        }
     }
 
     /**

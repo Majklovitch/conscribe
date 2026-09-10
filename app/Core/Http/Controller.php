@@ -3,6 +3,8 @@
 namespace App\Core\Http;
 
 use App\Core\Template\View;
+use App\Core\Validation\ValidationException;
+use App\Core\Validation\Validator;
 use RuntimeException;
 
 abstract class Controller {
@@ -31,6 +33,34 @@ abstract class Controller {
         }
 
         return $this->session;
+    }
+
+    /**
+     * Validates the request body and returns only the fields asked for.
+     *
+     * Throws on failure, so an action can validate on its first line and then
+     * write the happy path straight through. The router turns the exception
+     * into a redirect back with the errors and the old input, or a 422 for a
+     * client that wants JSON - see Router::handle().
+     *
+     *   $data = $this->validate([
+     *       'email'   => 'required|email|max:255',
+     *       'message' => 'required|min:10',
+     *   ]);
+     *
+     * @param array<string, string|array<int, string|\Closure>> $rules
+     * @param array<string, string>                            $messages
+     * @return array<string, mixed>
+     * @throws ValidationException
+     */
+    protected function validate(array $rules, array $messages = []): array {
+        $request = $this->request();
+
+        // Query and body together, so the same action works for a form post and
+        // for a filtered GET without the caller having to say which.
+        $data = $request->getBodyParams() + $request->getQueryParams();
+
+        return Validator::make($data, $rules, $messages)->validate();
     }
 
     /**

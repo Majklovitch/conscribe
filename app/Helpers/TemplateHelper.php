@@ -299,6 +299,32 @@ function has_flash(string $key): bool {
 /**
  * A previously submitted form value, for pre-filling after a validation error.
  */
+/**
+ * The validation errors flashed by the last failed submission.
+ *
+ * The router flashes them on a ValidationException, so a template needs no
+ * knowledge of how the form failed - only whether this field did.
+ *
+ *   <input name="email" value="<?= esc(old('email')) ?>">
+ *   <?php if (has_error('email')): ?>
+ *       <p class="error"><?= esc(error('email')) ?></p>
+ *   <?php endif ?>
+ */
+function errors(): \App\Core\Validation\ErrorBag {
+    $flashed = Session::instance()->getFlash('errors', []);
+
+    return new \App\Core\Validation\ErrorBag(is_array($flashed) ? $flashed : []);
+}
+
+function has_error(string $field): bool {
+    return errors()->has($field);
+}
+
+/** The first message for a field, or '' - what sits next to an input. */
+function error(string $field): string {
+    return errors()->first($field);
+}
+
 function old(string $key, mixed $default = ''): mixed {
     return Session::instance()->old($key, $default);
 }
