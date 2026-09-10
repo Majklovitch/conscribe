@@ -10,10 +10,18 @@ use ReflectionNamedType;
 
 class Router {
 
-    private array $routes = [
-        'GET'  => [],
-        'POST' => [],
-    ];
+    /**
+     * Methods a route may be registered under.
+     *
+     * HEAD is absent on purpose: it is answered from the GET table (see
+     * handle()), so registering it separately could only ever create a HEAD
+     * that disagrees with its own GET. OPTIONS is absent for the same kind of
+     * reason - it is answered from what the other tables contain.
+     */
+    public const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
+    /** @var array<string, array<int, array>> method => routes */
+    private array $routes;
 
     /**
      * Options applied to every route registered inside the current group().
@@ -36,6 +44,7 @@ class Router {
 
     public function __construct(?Session $session = null) {
         $this->session = $session ?? Session::instance();
+        $this->routes  = array_fill_keys(self::METHODS, []);
     }
 
     /**
@@ -48,6 +57,36 @@ class Router {
 
     public function post(string $url, array|callable $handler, array $options = []): void {
         $this->addRoute('POST', $url, $handler, $options);
+    }
+
+    public function put(string $url, array|callable $handler, array $options = []): void {
+        $this->addRoute('PUT', $url, $handler, $options);
+    }
+
+    public function patch(string $url, array|callable $handler, array $options = []): void {
+        $this->addRoute('PATCH', $url, $handler, $options);
+    }
+
+    public function delete(string $url, array|callable $handler, array $options = []): void {
+        $this->addRoute('DELETE', $url, $handler, $options);
+    }
+
+    /**
+     * Registers one URL under several methods at once.
+     *
+     * The generic form behind the verb helpers. It exists for the REST case,
+     * where one resource answers to a handful of methods and spelling each of
+     * them out separately says nothing the list does not already say:
+     *
+     *   $router->map(['PUT', 'PATCH'], 'api/order/{id}', [OrderApi::class, 'update']);
+     *
+     * @param string|string[] $methods
+     * @param array|callable  $handler
+     */
+    public function map(string|array $methods, string $url, array|callable $handler, array $options = []): void {
+        foreach ((array) $methods as $method) {
+            $this->addRoute($method, $url, $handler, $options);
+        }
     }
 
     /**
@@ -110,6 +149,17 @@ class Router {
     }
 
     private function addRoute(string $method, string $url, array|callable $handler, array $options = []): void {
+        $method = strtoupper($method);
+
+        // Rejected at registration rather than silently creating a table no
+        // request will ever look in - a route nobody can reach is a bug that
+        // only shows up as a 404 much later.
+        if (!in_array($method, self::METHODS, true)) {
+            throw new \InvalidArgumentException(
+                sprintf("Route '%s' uses unsupported method '%s'; expected one of %s.", $url, $method, implode(', ', self::METHODS))
+            );
+        }
+
         if (is_array($handler) && (!isset($handler[0], $handler[1]) || !is_string($handler[0]) || !is_string($handler[1]))) {
             throw new \InvalidArgumentException("Route '{$url}' must be registered as [ControllerClass::class, 'method'] or a callable.");
         }
@@ -121,7 +171,7 @@ class Router {
         // 'clanek/{slug}' => 'clanek/(?P<slug>[^/]+)'
         $pattern = preg_replace('/\{([a-zA-Z0-9_]+)\}/', '(?P<$1>[^/]+)', $url);
 
-        $this->routes[strtoupper($method)][] = [
+        $this->routes[$method][] = [
             'pattern' => '#^' . $pattern . '$#D',
             'handler' => $handler,
             // The template is kept alongside the compiled regex: the sitemap
@@ -176,6 +226,19 @@ class Router {
         // HEAD is routed through the GET table.
         $lookupMethod = $method === 'HEAD' ? 'GET' : $method;
 
+        // OPTIONS is answered from the route table itself: whatever the path is
+        // registered under is what the client may use. Nothing to dispatch, so
+        // it is handled before the lookup - a route table has no OPTIONS entry
+        // to find. The CORS headers a browser preflight also wants are a
+        // separate concern and belong in middleware, not here.
+        if ($method === 'OPTIONS') {
+            $allowed = $this->allowedMethodsFor($uri);
+
+            return $allowed === []
+                ? $this->error(404, 'Page not found.', $request)
+                : (new Response('', 204))->setHeader('Allow', implode(', ', $allowed));
+        }
+
         foreach ($this->routes[$lookupMethod] ?? [] as $route) {
             if (preg_match($route['pattern'], $uri, $matches)) {
                 if (!$this->passesCsrf($route, $request)) {
@@ -209,11 +272,20 @@ class Router {
      *
      *   $router->post('api/webhook', $handler, ['csrf' => false]);
      *
+     * Every state-changing method is covered, not just POST. PUT, PATCH and
+     * DELETE are not reachable from a plain HTML form, but they are reachable
+     * from fetch() on an authenticated session, which is exactly the case CSRF
+     * is about. A token-authenticated API sends no cookies and should opt out
+     * at the group level:
+     *
+     *   $router->group(['csrf' => false], function (Router $router) { ... });
+     *
      * The token is read from the body field first and then from the header, so
-     * both a plain form post and a fetch() work.
+     * both a plain form post and a fetch() work. Request decodes a JSON body
+     * whatever the method, so post('csrf_token') finds it there too.
      */
     private function passesCsrf(array $route, Request $request): bool {
-        if ($request->getMethod() !== 'POST') {
+        if (in_array($request->getMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
             return true;
         }
 
@@ -227,11 +299,19 @@ class Router {
     }
 
     /**
-     * Methods the given path is registered under, excluding the one just tried.
+     * Methods the given path is registered under.
+     *
+     * $exceptMethod drops the one already tried, which is what the 405 case
+     * wants - it is answering "not that one, but these". OPTIONS passes null,
+     * because it is asking about the path as a whole.
+     *
+     * HEAD and OPTIONS are added rather than looked up: neither has a route
+     * table, both are answered by handle() from the GET table and from this
+     * list respectively, so a path that matches anything supports them.
      *
      * @return string[]
      */
-    private function allowedMethodsFor(string $uri, string $exceptMethod): array {
+    private function allowedMethodsFor(string $uri, ?string $exceptMethod = null): array {
         $allowed = [];
 
         foreach ($this->routes as $method => $routes) {
@@ -248,6 +328,13 @@ class Router {
                     break;
                 }
             }
+        }
+
+        // A path registered only under the method just excluded still exists;
+        // it just has nothing left to offer, and OPTIONS alone would be a
+        // misleading answer.
+        if ($allowed !== []) {
+            $allowed[] = 'OPTIONS';
         }
 
         return $allowed;
