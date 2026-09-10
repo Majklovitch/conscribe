@@ -46,6 +46,8 @@
         "lint": "php bin/lint.php",
         "test": "phpunit",
         "analyse": "phpstan analyse --memory-limit=512M",
+        "fix": "php-cs-fixer fix",
+        "fix:check": "php-cs-fixer fix --dry-run --diff",
         "check": [
             "@lint",
             "@analyse",
@@ -57,6 +59,7 @@
         "build:dev": "Compile assets with expanded CSS and a source map.",
         "build:watch": "Rebuild assets whenever a file under assets/ changes.",
         "analyse": "Static analysis (PHPStan level 5). The memory limit is a flag because .neon cannot set it.",
+        "fix": "Apply the coding style (PSR-12, house-style braces - see .php-cs-fixer.dist.php).",
         "check": "Everything CI would run, if there were CI: lint, analyse, test."
     },
     "require-dev": {
