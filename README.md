@@ -1,6 +1,6 @@
 # Conscribe PHP
 
-Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, and a module system for optional features (dunno if i would maintain it this way) — without a container, an ORM, or a compile step.
+Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
 
 **Version 1.3.9** · Requires **PHP 8.4+**
 
@@ -35,23 +35,24 @@ Now enjoy AI readme :D
 2. [Project Structure](#project-structure)
 3. [Installation](#installation)
 4. [Configuration](#configuration)
-5. [Routing](#routing)
-6. [Controllers](#controllers)
-7. [Request](#request)
-8. [Response](#response)
-9. [Views & Layouts](#views--layouts)
-10. [Template Helpers](#template-helpers)
-11. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
-12. [Images & Media Pipeline](#images--media-pipeline)
-13. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-14. [CSRF Protection](#csrf-protection)
-15. [Database Layer](#database-layer)
-16. [Logging & Error Handling](#logging--error-handling)
-17. [Modules](#modules)
-18. [Menu](#menu)
-19. [Tracking Codes](#tracking-codes)
-20. [Security Summary](#security-summary)
-21. [Deployment](#deployment)
+5. [Container](#container)
+6. [Routing](#routing)
+7. [Controllers](#controllers)
+8. [Request](#request)
+9. [Response](#response)
+10. [Views & Layouts](#views--layouts)
+11. [Template Helpers](#template-helpers)
+12. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+13. [Images & Media Pipeline](#images--media-pipeline)
+14. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+15. [CSRF Protection](#csrf-protection)
+16. [Database Layer](#database-layer)
+17. [Logging & Error Handling](#logging--error-handling)
+18. [Modules](#modules)
+19. [Menu](#menu)
+20. [Tracking Codes](#tracking-codes)
+21. [Security Summary](#security-summary)
+22. [Deployment](#deployment)
 
 ---
 
@@ -60,7 +61,8 @@ Now enjoy AI readme :D
 | Area | What you get |
 | --- | --- |
 | **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
-| **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures |
+| **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures; constructor dependencies autowired |
+| **Container** | PSR-11, autowiring by constructor reflection, shared entries by default, `make()` for fresh ones, cycles reported as the chain that caused them |
 | **HTTP** | Immutable-ish `Request` (query/body/JSON/headers/cookies/files), `Response` with header canonicalization, response-splitting protection, cookies, and factories for HTML/JSON/redirect/no-content |
 | **Views** | Plain PHP templates with automatic header/footer layout wrapping, isolated variable scopes (`EXTR_SKIP`), path-traversal-safe resolution, reusable components |
 | **Helpers** | `esc()`, `dateFormat()`, `truncate()`, `asset()`, `image()`, `image_tag()`, `svg()`, `component()`, `flash()`, `old()`, `csrf_field()`, `renderTrackingCodes()` |
@@ -254,6 +256,67 @@ Config::set($array);           // override the whole config (tests)
 The environment flag drives three things: `display_errors`, the default log threshold, and whether 5xx pages show the internal message or a generic sentence.
 
 ---
+
+## Container
+
+A small PSR-11 container. It is not a service locator you reach into from
+everywhere: the router uses it to build controllers and to fill action
+parameters, and that is most of what it is for.
+
+**Nothing needs registering** if it can be built from its own constructor. A
+controller that asks for a service gets one:
+
+```php
+class OrderController extends Controller {
+    public function __construct(private OrderRepository $orders) {
+    }
+
+    public function show(int $id): Response {
+        return $this->json($this->orders->find($id));
+    }
+}
+```
+
+An action parameter the URL cannot fill is resolved the same way, so a service
+needed by one action only does not have to sit in the constructor:
+
+```php
+public function show(int $id, MediaService $media): Response { … }
+```
+
+`{id}` still wins over the container for `$id`, and `Request` and `Session`
+still come from the request being handled rather than from a binding.
+
+**Interfaces need a binding**, because nothing can be autowired from a name that
+has no constructor:
+
+```php
+$container = $bootstrap->container();
+
+$container->bind(PaymentGateway::class, fn () => new StripeGateway(Config::get('stripe.key')));
+$container->alias(ClockInterface::class, SystemClock::class);
+$container->instance(Basket::class, $basket);       // something already built
+```
+
+The core registers `Request`, `Session`, `PDO` and `LoggerInterface`. The last
+two are factories over the existing lazy accessors, so a request that never
+touches the database still opens no connection.
+
+**Entries are shared.** `get()` builds once and remembers; `make()` builds fresh
+every time and takes arguments by parameter name:
+
+```php
+$container->make(Report::class, ['month' => '2026-09']);
+```
+
+**Failures say what went wrong.** An unresolvable parameter names itself and its
+class, a cycle is reported as the chain that caused it rather than as a stack
+overflow, and a controller the container cannot build becomes a logged 500
+instead of a fatal.
+
+The router works without a container — `new Router()` still constructs
+controllers with `new` — so nothing that existed before this needs changing.
+
 
 ## Routing
 

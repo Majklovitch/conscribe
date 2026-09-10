@@ -2,12 +2,15 @@
 
 namespace App\Core\Http;
 
+use App\Core\Container\Container;
 use App\Core\Template\ViewNotFoundException;
+use Psr\Container\ContainerInterface;
 use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use ReflectionNamedType;
+use Throwable;
 
 class Router {
     /**
@@ -42,9 +45,19 @@ class Router {
      */
     private Session $session;
 
-    public function __construct(?Session $session = null) {
-        $this->session = $session ?? Session::instance();
-        $this->routes  = array_fill_keys(self::METHODS, []);
+    /**
+     * Used to build controllers and to fill action parameters the URL cannot.
+     *
+     * Optional, and the router works without it - a plain new Router() still
+     * constructs controllers with `new`, which is all this project needed
+     * before there was a container.
+     */
+    private ?ContainerInterface $container;
+
+    public function __construct(?Session $session = null, ?ContainerInterface $container = null) {
+        $this->session   = $session ?? Session::instance();
+        $this->container = $container;
+        $this->routes    = array_fill_keys(self::METHODS, []);
     }
 
     /**
@@ -348,7 +361,22 @@ class Router {
                 return $this->error(500, "Controller {$controllerClass} not found.", $request);
             }
 
-            $controller = new $controllerClass();
+            try {
+                // Through the container the controller may declare its
+                // dependencies in the constructor; without one it must be
+                // constructible with no arguments, as before.
+                $controller = $this->container instanceof Container
+                    ? $this->container->make($controllerClass)
+                    : new $controllerClass();
+            } catch (Throwable $e) {
+                // Both paths can fail: the container reports what it could not
+                // resolve, and `new` throws ArgumentCountError when the
+                // controller declares dependencies but there is no container to
+                // supply them. Either way it is a 500 that reaches the log, not
+                // a fatal that reaches the visitor.
+                return $this->error(500, sprintf('Could not build %s: %s', $controllerClass, $e->getMessage()), $request);
+            }
+
             if (method_exists($controller, 'setRequest')) {
                 $controller->setRequest($request);
             }
@@ -442,6 +470,18 @@ class Router {
 
             if ($typeName !== null && ($typeName === Session::class || is_subclass_of($typeName, Session::class))) {
                 $args[] = $this->session;
+                continue;
+            }
+
+            // A URL parameter wins over the container: {id} in the route is
+            // what the caller asked for, whatever else could fill $id.
+            if (!array_key_exists($name, $params)
+                && $typeName !== null
+                && $type instanceof ReflectionNamedType
+                && !$type->isBuiltin()
+                && $this->container?->has($typeName)
+            ) {
+                $args[] = $this->container->get($typeName);
                 continue;
             }
 

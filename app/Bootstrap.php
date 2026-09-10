@@ -3,15 +3,21 @@
 namespace App;
 
 use App\Core\Config;
+use App\Core\Container\Container;
+use App\Core\Database\Connection;
 use App\Core\Http\Csp;
 use App\Core\Http\ErrorPage;
 use App\Core\Http\Request;
 use App\Core\Http\Router;
+use App\Core\Http\Session;
 use App\Core\Logging\ErrorHandler;
+use App\Core\Logging\Log;
 use App\Core\Module\ModuleManager;
 use App\Models\Menu\MenuRepository;
 use App\Services\Assets\AssetBuilder;
 use App\Services\Sitemap\SitemapService;
+use PDO;
+use Psr\Log\LoggerInterface;
 
 /**
  * Application wiring.
@@ -29,6 +35,7 @@ final class Bootstrap {
     private ErrorPage $errorPage;
     private ?Request $request = null;
     private ?Router $router = null;
+    private ?Container $container = null;
 
     private function __construct() {
         $this->isDevelopment = Config::get('conscribe.environment', 'production') === 'development';
@@ -78,6 +85,11 @@ final class Bootstrap {
     public function request(): Request {
         return $this->request
             ?? throw new \LogicException('The request is only built by Bootstrap::web().');
+    }
+
+    public function container(): Container {
+        return $this->container
+            ?? throw new \LogicException('The container is only built by Bootstrap::web().');
     }
 
     public function run(): void {
@@ -144,10 +156,38 @@ final class Bootstrap {
 
     private function bootHttp(): void {
         $this->request = Request::createFromGlobals();
-        // Router::__construct falls back to Session::instance() itself.
-        $this->router  = new Router();
+        $session       = Session::instance();
+
+        $this->container = $this->buildContainer($this->request, $session);
+        $this->router    = new Router($session, $this->container);
 
         $this->router->setErrorHandler($this->errorPage);
+    }
+
+    /**
+     * The container as the application sees it.
+     *
+     * Only the core services are registered, and the two that are
+     * request-scoped are handed in rather than built: Request and Session
+     * exist before the container has any use for them. The rest are bound as
+     * factories over the existing static accessors, so nothing is connected,
+     * opened or logged to until something actually asks - a request that never
+     * touches the database still does not open a connection.
+     *
+     * Application services need no registration at all; the container
+     * autowires any concrete class from its constructor.
+     */
+    private function buildContainer(Request $request, Session $session): Container {
+        $container = new Container();
+
+        $container->instance(Request::class, $request);
+        $container->instance(Session::class, $session);
+        $container->instance(Container::class, $container);
+
+        $container->bind(LoggerInterface::class, static fn (): LoggerInterface => Log::get());
+        $container->bind(PDO::class, static fn (): PDO => Connection::get());
+
+        return $container;
     }
 
     private function bootRoutes(): void {
