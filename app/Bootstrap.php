@@ -5,9 +5,14 @@ namespace App;
 use App\Core\Config;
 use App\Core\Console\Commands\BuildCommand;
 use App\Core\Console\Commands\LintCommand;
+use App\Core\Console\Commands\MakeMigrationCommand;
+use App\Core\Console\Commands\MigrateCommand;
+use App\Core\Console\Commands\MigrateRollbackCommand;
+use App\Core\Console\Commands\MigrateStatusCommand;
 use App\Core\Console\Kernel;
 use App\Core\Container\Container;
 use App\Core\Database\Connection;
+use App\Core\Database\Migrations\Migrator;
 use App\Core\Http\Csp;
 use App\Core\Http\ErrorPage;
 use App\Core\Http\Request;
@@ -111,7 +116,14 @@ final class Bootstrap {
         // The Kernel registers itself in the container, so `list` and `help`
         // resolve to this console rather than to a fresh empty one.
         $kernel = new Kernel($this->container());
-        $kernel->registerMany([BuildCommand::class, LintCommand::class]);
+        $kernel->registerMany([
+            BuildCommand::class,
+            LintCommand::class,
+            MakeMigrationCommand::class,
+            MigrateCommand::class,
+            MigrateRollbackCommand::class,
+            MigrateStatusCommand::class,
+        ]);
 
         foreach ((new ModuleManager())->modules() as $module) {
             $kernel->registerMany($module->commands());
@@ -225,6 +237,15 @@ final class Bootstrap {
 
         $container->bind(LoggerInterface::class, static fn (): LoggerInterface => Log::get());
         $container->bind(PDO::class, static fn (): PDO => Connection::get());
+
+        // Bound rather than autowired: the migrator needs to be told where the
+        // migrations live, and a constructor argument the container cannot see
+        // is exactly what a binding is for. Lazy like the rest, so a request
+        // that is not a migration never touches the database because of it.
+        $container->bind(Migrator::class, static fn (): Migrator => new Migrator(
+            Connection::get(),
+            self::root() . '/database/migrations',
+        ));
 
         return $container;
     }

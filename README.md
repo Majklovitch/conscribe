@@ -36,25 +36,26 @@ Now enjoy AI readme :D
 3. [Installation](#installation)
 4. [Configuration](#configuration)
 5. [Container](#container)
-6. [Console](#console)
-7. [Middleware](#middleware)
-8. [Routing](#routing)
-9. [Controllers](#controllers)
-10. [Request](#request)
-11. [Response](#response)
-12. [Views & Layouts](#views--layouts)
-13. [Template Helpers](#template-helpers)
-14. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
-15. [Images & Media Pipeline](#images--media-pipeline)
-16. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-17. [CSRF Protection](#csrf-protection)
-18. [Database Layer](#database-layer)
-19. [Logging & Error Handling](#logging--error-handling)
-20. [Modules](#modules)
-21. [Menu](#menu)
-22. [Tracking Codes](#tracking-codes)
-23. [Security Summary](#security-summary)
-24. [Deployment](#deployment)
+6. [Migrations](#migrations)
+7. [Console](#console)
+8. [Middleware](#middleware)
+9. [Routing](#routing)
+10. [Controllers](#controllers)
+11. [Request](#request)
+12. [Response](#response)
+13. [Views & Layouts](#views--layouts)
+14. [Template Helpers](#template-helpers)
+15. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+16. [Images & Media Pipeline](#images--media-pipeline)
+17. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+18. [CSRF Protection](#csrf-protection)
+19. [Database Layer](#database-layer)
+20. [Logging & Error Handling](#logging--error-handling)
+21. [Modules](#modules)
+22. [Menu](#menu)
+23. [Tracking Codes](#tracking-codes)
+24. [Security Summary](#security-summary)
+25. [Deployment](#deployment)
 
 ---
 
@@ -65,6 +66,7 @@ Now enjoy AI readme :D
 | **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
 | **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures; constructor dependencies autowired |
 | **Container** | PSR-11, autowiring by constructor reflection, shared entries by default, `make()` for fresh ones, cycles reported as the chain that caused them |
+| **Migrations** | Timestamped PHP migration files, batches, `migrate` / `migrate:rollback` / `migrate:status` / `make:migration`, drift detection |
 | **Console** | `php tty` with autowired commands, `list`/`help`, did-you-mean on a typo, colour that turns itself off in a pipe, modules can add their own |
 | **Middleware** | Global and per-route/per-group pipeline, request rewriting, short-circuiting, class names resolved through the container |
 | **HTTP** | Immutable-ish `Request` (query/body/JSON/headers/cookies/files), `Response` with header canonicalization, response-splitting protection, cookies, and factories for HTML/JSON/redirect/no-content |
@@ -136,6 +138,7 @@ Now enjoy AI readme :D
 ├── assets/                        # Asset sources (compiled into public/)
 │   ├── scss/                      # main.scss + partials
 │   └── js/                        # main.js
+├── database/migrations/           # Timestamped migration files
 ├── bin/tty                        # Console kernel entry point
 ├── tty                            # Shim, so it reads as `php tty`
 ├── public/                        # Document root
@@ -321,6 +324,69 @@ instead of a fatal.
 
 The router works without a container — `new Router()` still constructs
 controllers with `new` — so nothing that existed before this needs changing.
+
+
+## Migrations
+
+```bash
+php tty make:migration create_orders_table
+php tty migrate
+php tty migrate:status
+php tty migrate:rollback
+```
+
+A migration file returns an anonymous class, so two migrations can describe the
+same table without colliding and nothing has to be added to the autoloader:
+
+```php
+<?php
+
+use App\Core\Database\Migrations\Migration;
+use PDO;
+
+return new class extends Migration {
+    public function up(PDO $db): void {
+        $db->exec('CREATE TABLE orders (id INT AUTO_INCREMENT PRIMARY KEY, total INT NOT NULL)');
+    }
+
+    public function down(PDO $db): void {
+        $db->exec('DROP TABLE orders');
+    }
+};
+```
+
+**The SQL is written by hand on purpose.** A schema builder is a project of its
+own and would sit oddly in a framework whose data layer is a thin wrapper over
+PDO — you would be learning its dialect instead of the one your database already
+documents.
+
+**Batches.** Everything applied by one `migrate` run shares a batch number, and
+`migrate:rollback` undoes that run — newest migration first — rather than one
+arbitrary file. That is almost always what you want after a deploy goes wrong.
+
+**Order** is by filename, which is why `make:migration` prefixes a timestamp: it
+is obvious in a directory listing and stable across machines, unlike a counter
+that two branches would both claim.
+
+**A migration that cannot be undone** should throw rather than leave `down()`
+empty, so a rollback stops loudly instead of quietly marking it undone:
+
+```php
+public function down(PDO $db): void {
+    throw new IrreversibleMigration('The archived rows are gone.');
+}
+```
+
+> **MySQL commits DDL implicitly.** A `CREATE TABLE` cannot be rolled back by
+> the database, so wrapping a run in a transaction would only make it look safe.
+> The migrator records each migration as it finishes and stops at the first
+> failure, leaving everything before it applied — and `migrate:status` shows you
+> exactly where it stopped. Postgres and SQLite do support transactional DDL; a
+> migration that wants that guarantee can open a transaction in `up()` itself.
+
+`migrate:status` also reports **drift** — a migration recorded in the database
+whose file is no longer in the branch shows as `missing`, and the command exits
+non-zero so a deploy script notices.
 
 
 ## Console

@@ -24,10 +24,12 @@ final class ListCommand extends Command {
         $output->line();
 
         $rows = [];
-        foreach ($this->kernel->commands() as $name => $class) {
-            // Built one at a time and discarded: reading a description must
-            // not require the command's dependencies to be satisfiable.
-            $rows[$name] = $this->describe($name);
+        foreach (array_keys($this->kernel->commands()) as $name) {
+            // Read by reflection rather than from an instance: listing what
+            // exists must not require every command's dependencies to be
+            // satisfiable. `tty list` on a machine with no database still says
+            // what `migrate` is for.
+            $rows[$name] = $this->kernel->descriptionOf($name);
         }
 
         $output->columns($rows);
@@ -35,16 +37,5 @@ final class ListCommand extends Command {
         $output->comment('  `php tty help <command>` says more about one of them.');
 
         return self::SUCCESS;
-    }
-
-    private function describe(string $name): string {
-        try {
-            return $this->kernel->resolve($name)->description();
-        } catch (\Throwable) {
-            // A command whose dependencies cannot be built is still worth
-            // listing - it is more useful to see that it exists than to have
-            // the whole listing fail because of one of them.
-            return '(unavailable)';
-        }
     }
 }

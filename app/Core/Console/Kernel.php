@@ -83,8 +83,27 @@ final class Kernel {
     }
 
     /**
-     * Builds one command. Public because `help` and `list` need to read the
-     * others' descriptions.
+     * A command's one-line description, without building it.
+     *
+     * Read from the class's default property value, the same way the name is.
+     * Listing what exists must not require every command's dependencies to be
+     * satisfiable - `tty list` on a machine with no database still has to be
+     * able to say what `migrate` is for.
+     */
+    public function descriptionOf(string $name): string {
+        $class = $this->commands[$name] ?? null;
+        if ($class === null) {
+            return '';
+        }
+
+        $default = (new \ReflectionClass($class))->getDefaultProperties()['description'] ?? '';
+
+        return is_string($default) ? $default : '';
+    }
+
+    /**
+     * Builds one command. Public because `help` needs the full detail, which
+     * only an instance can be asked for.
      */
     public function resolve(string $name): Command {
         $class = $this->commands[$name]
