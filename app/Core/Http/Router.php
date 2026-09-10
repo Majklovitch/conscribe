@@ -3,6 +3,7 @@
 namespace App\Core\Http;
 
 use App\Core\Container\Container;
+use App\Core\Http\Middleware\MiddlewareException;
 use App\Core\Http\Middleware\MiddlewareInterface;
 use App\Core\Http\Middleware\Pipeline;
 use App\Core\Template\ViewNotFoundException;
@@ -238,8 +239,8 @@ class Router {
             // second.
             if ($key === 'middleware') {
                 $defaults[$key] = [
-                    ...array_values((array) ($defaults[$key] ?? [])),
-                    ...array_values((array) $value),
+                    ...Pipeline::normalize($defaults[$key] ?? null),
+                    ...Pipeline::normalize($value),
                 ];
                 continue;
             }
@@ -266,10 +267,22 @@ class Router {
      * this is what makes routing testable.
      */
     public function handle(Request $request): Response {
-        // The global middleware wraps everything, including the 404s and the
-        // 405s: dispatch() is just the innermost layer of the same pipeline.
-        return (new Pipeline($this->middleware, $this->container))
-            ->handle($request, fn (Request $request): Response => $this->dispatch($request));
+        try {
+            // The global middleware wraps everything, including the 404s and
+            // the 405s: dispatch() is just the innermost layer of the same
+            // pipeline.
+            return (new Pipeline($this->middleware, $this->container))
+                ->handle($request, fn (Request $request): Response => $this->dispatch($request));
+        } catch (MiddlewareException $e) {
+            // Only the pipeline's own complaints are caught here - a
+            // misspelled class, something that is not a middleware, one that
+            // did not return. Those are wiring mistakes and belong in the log
+            // as a 500, the same as a controller that cannot be built. An
+            // exception thrown by the application inside a middleware is not
+            // this type and keeps travelling to the error handler, where the
+            // debug bar can show it properly.
+            return $this->error(500, $e->getMessage(), $request);
+        }
     }
 
     /**
@@ -313,7 +326,7 @@ class Router {
                 // The route's own middleware wraps the CSRF check as well as
                 // the action: an endpoint authenticating some other way needs
                 // its middleware to have run before anything can reject it.
-                return (new Pipeline((array) ($route['options']['middleware'] ?? []), $this->container))
+                return (new Pipeline(Pipeline::normalize($route['options']['middleware'] ?? null), $this->container))
                     ->handle($request, function (Request $request) use ($route, $params): Response {
                         if (!$this->passesCsrf($route, $request)) {
                             return $this->error(419, 'The form expired or the CSRF token was missing.', $request);

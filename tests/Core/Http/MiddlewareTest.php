@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Core\Http;
 
 use App\Core\Container\Container;
+use App\Core\Http\Middleware\MiddlewareException;
 use App\Core\Http\Middleware\MiddlewareInterface;
 use App\Core\Http\Middleware\Pipeline;
 use App\Core\Http\Request;
@@ -59,6 +60,13 @@ final class NeedsService implements MiddlewareInterface {
 }
 
 final class NotMiddleware {
+}
+
+/** Throws the way application code would, rather than misusing the pipeline. */
+final class Explodes implements MiddlewareInterface {
+    public function process(Request $request, callable $next): Response {
+        throw new \DomainException('application failure');
+    }
 }
 
 #[CoversClass(Pipeline::class)]
@@ -258,6 +266,62 @@ final class MiddlewareTest extends TestCase {
         $router->handle(RequestFactory::make('GET', 'page'));
 
         self::assertSame(['in:global', 'in:route', 'out:route', 'out:global'], Tagger::$log);
+    }
+
+    // -----------------------------------------------------------------
+    // Misuse
+    // -----------------------------------------------------------------
+
+    #[TestDox('a single middleware without the array is wrapped, not cast')]
+    public function testSingleMiddlewareNeedNotBeWrappedInAnArray(): void {
+        // (array) on an object yields its properties, so the shorthand would
+        // otherwise try to use a private property value as a class name - and
+        // say so in the error message.
+        $router = new Router(new FakeSession());
+        $router->get('page', static fn (): Response => Response::json(['ok' => true]), [
+            'middleware' => new Tagger('solo'),
+        ]);
+
+        $response = $router->handle(RequestFactory::make('GET', 'page'));
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('yes', $response->getHeader('X-Tag-solo'));
+    }
+
+    #[TestDox('a misspelled middleware class says so, rather than blaming the interface')]
+    public function testMissingClassIsReportedAsMissing(): void {
+        $this->expectException(MiddlewareException::class);
+        $this->expectExceptionMessage('neither a registered container entry nor an existing class');
+
+        (new Pipeline(['No\Such\Middleware']))
+            ->handle(RequestFactory::make('GET', 'x'), static fn (): Response => Response::json([]));
+    }
+
+    #[TestDox('a broken middleware is a logged 500, not an escaped exception')]
+    public function testPipelineMisuseBecomesA500(): void {
+        $router = new Router(new FakeSession());
+        $router->middleware(static fn (Request $request, callable $next) => null);
+        $router->get('page', static fn (): Response => Response::json([]));
+
+        $response = $router->handle(RequestFactory::make('GET', 'page'));
+
+        self::assertSame(500, $response->getStatusCode());
+        self::assertStringContainsString('must return a Response', $response->getContent());
+    }
+
+    #[TestDox('an application exception inside middleware still reaches the error handler')]
+    public function testApplicationExceptionsAreNotSwallowed(): void {
+        // The 500 above must not become a blanket catch: an exception from
+        // application code has to keep travelling, or the debug bar never sees
+        // it and the log gets a useless message instead of a stack trace.
+        $router = new Router(new FakeSession());
+        $router->middleware(new Explodes());
+        $router->get('page', static fn (): Response => Response::json([]));
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('application failure');
+
+        $router->handle(RequestFactory::make('GET', 'page'));
     }
 
     #[TestDox('route middleware runs before the CSRF check can reject')]

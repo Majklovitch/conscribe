@@ -6,7 +6,6 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use Closure;
 use Psr\Container\ContainerInterface;
-use RuntimeException;
 
 /**
  * Runs a list of middleware around a destination.
@@ -42,6 +41,27 @@ final class Pipeline {
     }
 
     /**
+     * Normalises whatever a route declared into a list.
+     *
+     * A single middleware written without the surrounding array is the obvious
+     * shorthand, and casting it with (array) would quietly turn the object into
+     * a list of its own properties - so `['middleware' => new Cors($origins)]`
+     * would try to use a property value as a class name. Wrapping is the only
+     * safe reading.
+     *
+     * @return array<int, MiddlewareInterface|callable|class-string>
+     */
+    public static function normalize(mixed $middleware): array {
+        if ($middleware === null) {
+            return [];
+        }
+
+        return array_is_list($middleware = is_array($middleware) ? $middleware : [$middleware])
+            ? $middleware
+            : array_values($middleware);
+    }
+
+    /**
      * Sends the request through the middleware and into $destination.
      *
      * @param callable(Request): Response $destination
@@ -74,7 +94,7 @@ final class Pipeline {
                 // A middleware that forgets to return, or returns what $next
                 // gave it without returning it, would otherwise produce a blank
                 // page that nothing reports.
-                throw new RuntimeException(sprintf(
+                throw new MiddlewareException(sprintf(
                     'Middleware %s must return a Response, got %s.',
                     $this->describe($entry),
                     get_debug_type($response),
@@ -95,15 +115,25 @@ final class Pipeline {
         }
 
         if (is_string($entry)) {
+            // Said separately from the check below, because "there is no such
+            // class" and "that class is not a middleware" are different
+            // mistakes and the first one is usually a typo.
+            if ($this->container?->has($entry) !== true && !class_exists($entry)) {
+                throw new MiddlewareException(sprintf(
+                    'Middleware %s is neither a registered container entry nor an existing class.',
+                    $entry,
+                ));
+            }
+
             $resolved = $this->container?->has($entry) === true
                 ? $this->container->get($entry)
-                : (class_exists($entry) ? new $entry() : null);
+                : new $entry();
 
             if ($resolved instanceof MiddlewareInterface || (is_object($resolved) && is_callable($resolved))) {
                 return $resolved;
             }
 
-            throw new RuntimeException(sprintf(
+            throw new MiddlewareException(sprintf(
                 'Middleware %s must implement %s or be callable.',
                 $entry,
                 MiddlewareInterface::class,
@@ -114,7 +144,7 @@ final class Pipeline {
             return $entry;
         }
 
-        throw new RuntimeException(sprintf('Middleware entry of type %s is not usable.', get_debug_type($entry)));
+        throw new MiddlewareException(sprintf('Middleware entry of type %s is not usable.', get_debug_type($entry)));
     }
 
     private function describe(mixed $entry): string {
