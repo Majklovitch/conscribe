@@ -3,6 +3,8 @@
 namespace App\Core\Http;
 
 use App\Core\Container\Container;
+use App\Core\Http\Middleware\MiddlewareInterface;
+use App\Core\Http\Middleware\Pipeline;
 use App\Core\Template\ViewNotFoundException;
 use Psr\Container\ContainerInterface;
 use ReflectionException;
@@ -54,6 +56,17 @@ class Router {
      */
     private ?ContainerInterface $container;
 
+    /**
+     * Middleware wrapped around every request, outermost first.
+     *
+     * Separate from the per-route lists because it must also cover the
+     * requests that match no route at all - a rate limiter or an access log
+     * that only saw the successful routes would be worth little.
+     *
+     * @var array<int, MiddlewareInterface|callable|class-string>
+     */
+    private array $middleware = [];
+
     public function __construct(?Session $session = null, ?ContainerInterface $container = null) {
         $this->session   = $session ?? Session::instance();
         $this->container = $container;
@@ -99,6 +112,19 @@ class Router {
     public function map(string|array $methods, string $url, array|callable $handler, array $options = []): void {
         foreach ((array) $methods as $method) {
             $this->addRoute($method, $url, $handler, $options);
+        }
+    }
+
+    /**
+     * Adds middleware around every request, in the order given.
+     *
+     *   $router->middleware(TrimStrings::class, new Cors($origins));
+     *
+     * @param MiddlewareInterface|callable|class-string ...$middleware
+     */
+    public function middleware(mixed ...$middleware): void {
+        foreach ($middleware as $entry) {
+            $this->middleware[] = $entry;
         }
     }
 
@@ -205,6 +231,19 @@ class Router {
      */
     private function mergeOptions(array $defaults, array $options): array {
         foreach ($options as $key => $value) {
+            // Middleware is a list, not a map: the group's entries run first
+            // and the route's are appended after them. Merging it the way the
+            // other options are merged would union by position, so a group with
+            // two entries and a route with one would silently lose the group's
+            // second.
+            if ($key === 'middleware') {
+                $defaults[$key] = [
+                    ...array_values((array) ($defaults[$key] ?? [])),
+                    ...array_values((array) $value),
+                ];
+                continue;
+            }
+
             $defaults[$key] = is_array($value) && is_array($defaults[$key] ?? null)
                 ? $value + $defaults[$key]
                 : $value;
@@ -227,6 +266,20 @@ class Router {
      * this is what makes routing testable.
      */
     public function handle(Request $request): Response {
+        // The global middleware wraps everything, including the 404s and the
+        // 405s: dispatch() is just the innermost layer of the same pipeline.
+        return (new Pipeline($this->middleware, $this->container))
+            ->handle($request, fn (Request $request): Response => $this->dispatch($request));
+    }
+
+    /**
+     * Matches the request against the route table and runs the handler.
+     *
+     * Separate from handle() so that the global middleware sees the request
+     * before any of this happens, and so a middleware that rewrites the
+     * request - stripping a language prefix, say - is honoured by the matching.
+     */
+    private function dispatch(Request $request): Response {
         $uri = $request->getPath();
         $method = $request->getMethod();
 
@@ -254,14 +307,20 @@ class Router {
 
         foreach ($this->routes[$lookupMethod] ?? [] as $route) {
             if (preg_match($route['pattern'], $uri, $matches)) {
-                if (!$this->passesCsrf($route, $request)) {
-                    return $this->error(419, 'The form expired or the CSRF token was missing.', $request);
-                }
-
                 // Named parameters only; the numeric indexes from preg_match are dropped.
                 $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
 
-                return $this->execute($route['handler'], $params, $request);
+                // The route's own middleware wraps the CSRF check as well as
+                // the action: an endpoint authenticating some other way needs
+                // its middleware to have run before anything can reject it.
+                return (new Pipeline((array) ($route['options']['middleware'] ?? []), $this->container))
+                    ->handle($request, function (Request $request) use ($route, $params): Response {
+                        if (!$this->passesCsrf($route, $request)) {
+                            return $this->error(419, 'The form expired or the CSRF token was missing.', $request);
+                        }
+
+                        return $this->execute($route['handler'], $params, $request);
+                    });
             }
         }
 

@@ -36,23 +36,24 @@ Now enjoy AI readme :D
 3. [Installation](#installation)
 4. [Configuration](#configuration)
 5. [Container](#container)
-6. [Routing](#routing)
-7. [Controllers](#controllers)
-8. [Request](#request)
-9. [Response](#response)
-10. [Views & Layouts](#views--layouts)
-11. [Template Helpers](#template-helpers)
-12. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
-13. [Images & Media Pipeline](#images--media-pipeline)
-14. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-15. [CSRF Protection](#csrf-protection)
-16. [Database Layer](#database-layer)
-17. [Logging & Error Handling](#logging--error-handling)
-18. [Modules](#modules)
-19. [Menu](#menu)
-20. [Tracking Codes](#tracking-codes)
-21. [Security Summary](#security-summary)
-22. [Deployment](#deployment)
+6. [Middleware](#middleware)
+7. [Routing](#routing)
+8. [Controllers](#controllers)
+9. [Request](#request)
+10. [Response](#response)
+11. [Views & Layouts](#views--layouts)
+12. [Template Helpers](#template-helpers)
+13. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+14. [Images & Media Pipeline](#images--media-pipeline)
+15. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+16. [CSRF Protection](#csrf-protection)
+17. [Database Layer](#database-layer)
+18. [Logging & Error Handling](#logging--error-handling)
+19. [Modules](#modules)
+20. [Menu](#menu)
+21. [Tracking Codes](#tracking-codes)
+22. [Security Summary](#security-summary)
+23. [Deployment](#deployment)
 
 ---
 
@@ -63,6 +64,7 @@ Now enjoy AI readme :D
 | **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
 | **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures; constructor dependencies autowired |
 | **Container** | PSR-11, autowiring by constructor reflection, shared entries by default, `make()` for fresh ones, cycles reported as the chain that caused them |
+| **Middleware** | Global and per-route/per-group pipeline, request rewriting, short-circuiting, class names resolved through the container |
 | **HTTP** | Immutable-ish `Request` (query/body/JSON/headers/cookies/files), `Response` with header canonicalization, response-splitting protection, cookies, and factories for HTML/JSON/redirect/no-content |
 | **Views** | Plain PHP templates with automatic header/footer layout wrapping, isolated variable scopes (`EXTR_SKIP`), path-traversal-safe resolution, reusable components |
 | **Helpers** | `esc()`, `dateFormat()`, `truncate()`, `asset()`, `image()`, `image_tag()`, `svg()`, `component()`, `flash()`, `old()`, `csrf_field()`, `renderTrackingCodes()` |
@@ -316,6 +318,68 @@ instead of a fatal.
 
 The router works without a container — `new Router()` still constructs
 controllers with `new` — so nothing that existed before this needs changing.
+
+
+## Middleware
+
+A middleware wraps the dispatch. It can answer by itself, change the request on
+the way in, or change the response on the way out:
+
+```php
+use App\Core\Http\Middleware\MiddlewareInterface;
+
+final class Timer implements MiddlewareInterface {
+    public function process(Request $request, callable $next): Response {
+        $started = microtime(true);
+
+        return $next($request)->setHeader('X-Duration', (string) (int) ((microtime(true) - $started) * 1000));
+    }
+}
+```
+
+This is PSR-15's shape over this project's own `Request` and `Response` rather
+than PSR-7 — adopting PSR-15 properly would mean adopting PSR-7 with it and
+giving up the lean HTTP layer the rest of the core is built on.
+
+**Registering.** Globally, per group, or per route; entries run in the order
+given, and an entry may be an object, a callable, or a class name the container
+resolves (so a middleware can declare its own dependencies):
+
+```php
+$router->middleware(TrimStrings::class, new Cors($origins));
+
+$router->group(['middleware' => [RequireLogin::class]], function (Router $router): void {
+    $router->get('admin', [AdminController::class, 'index']);
+    $router->post('admin/save', [AdminController::class, 'save'], [
+        'middleware' => [AuditLog::class],     // appended after the group's
+    ]);
+});
+```
+
+**Order.** Global first, then group, then route, then the action — and the
+response travels back out in reverse. A route's list is *appended* to its
+group's rather than replacing it.
+
+**Global middleware also sees requests that match no route**, so a rate limiter
+or an access log covers the 404s and 405s too.
+
+**Short-circuiting** is just not calling `$next`:
+
+```php
+public function process(Request $request, callable $next): Response {
+    return $this->allowed($request) ? $next($request) : Response::json(['error' => 'Too many requests'], 429);
+}
+```
+
+**Rewriting** the request is honoured by the routing, since the matching happens
+inside the pipeline:
+
+```php
+return $next($request->withPath($strippedPath));
+```
+
+Route middleware wraps the CSRF check as well as the action, so an endpoint that
+authenticates some other way gets to run before anything can reject it.
 
 
 ## Routing
