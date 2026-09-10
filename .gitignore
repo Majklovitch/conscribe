@@ -10,3 +10,4 @@ PROPOSALS.md
 /public/css/*.map
 /public/js/*.map
 .phpunit.cache/
+.php-cs-fixer.cache
