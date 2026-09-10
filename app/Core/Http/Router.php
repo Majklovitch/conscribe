@@ -64,7 +64,7 @@ class Router {
      * requests that match no route at all - a rate limiter or an access log
      * that only saw the successful routes would be worth little.
      *
-     * @var array<int, MiddlewareInterface|callable|class-string>
+     * @var array<int, MiddlewareInterface|callable|string>
      */
     private array $middleware = [];
 
@@ -121,7 +121,7 @@ class Router {
      *
      *   $router->middleware(TrimStrings::class, new Cors($origins));
      *
-     * @param MiddlewareInterface|callable|class-string ...$middleware
+     * @param MiddlewareInterface|callable|string ...$middleware
      */
     public function middleware(mixed ...$middleware): void {
         foreach ($middleware as $entry) {

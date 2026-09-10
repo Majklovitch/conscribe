@@ -18,7 +18,10 @@ use Psr\Container\ContainerInterface;
  * Entries may be:
  *   - a MiddlewareInterface object;
  *   - a class name, resolved through the container (so middleware can declare
- *     its own dependencies) or, without one, constructed with `new`;
+ *     its own dependencies) or, without one, constructed with `new`. Typed as
+ *     a plain string rather than class-string on purpose: the name comes from a
+ *     route file and may well be a typo, and reporting that is this class's job
+ *     rather than something to declare away;
  *   - a callable with the same signature as process().
  *
  * Class names are resolved when the pipeline runs, not when it is declared:
@@ -27,13 +30,13 @@ use Psr\Container\ContainerInterface;
  * that route.
  */
 final class Pipeline {
-    /** @var array<int, MiddlewareInterface|callable|class-string> */
+    /** @var array<int, MiddlewareInterface|callable|string> */
     private array $middleware;
 
     private ?ContainerInterface $container;
 
     /**
-     * @param array<int, MiddlewareInterface|callable|class-string> $middleware
+     * @param array<int, MiddlewareInterface|callable|string> $middleware
      */
     public function __construct(array $middleware = [], ?ContainerInterface $container = null) {
         $this->middleware = array_values($middleware);
@@ -49,7 +52,7 @@ final class Pipeline {
      * would try to use a property value as a class name. Wrapping is the only
      * safe reading.
      *
-     * @return array<int, MiddlewareInterface|callable|class-string>
+     * @return array<int, MiddlewareInterface|callable|string>
      */
     public static function normalize(mixed $middleware): array {
         if ($middleware === null) {
@@ -79,7 +82,7 @@ final class Pipeline {
     }
 
     /**
-     * @param MiddlewareInterface|callable|class-string $entry
+     * @param MiddlewareInterface|callable|string $entry
      * @param callable(Request): Response               $next
      */
     private function wrap(mixed $entry, callable $next): Closure {
@@ -106,7 +109,7 @@ final class Pipeline {
     }
 
     /**
-     * @param MiddlewareInterface|callable|class-string $entry
+     * @param MiddlewareInterface|callable|string $entry
      * @return MiddlewareInterface|callable
      */
     private function resolve(mixed $entry): mixed {
