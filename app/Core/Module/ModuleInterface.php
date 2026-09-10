@@ -28,4 +28,15 @@ interface ModuleInterface {
      * Absolute path to the file with the global functions of the module, or null.
      */
     public function helpers(): ?string;
+
+    /**
+     * Console commands the module adds, as class names.
+     *
+     * This is what lets a module ship work that is not a request - an import,
+     * a cleanup, a migration of its own tables - without the console having to
+     * know the module exists.
+     *
+     * @return array<int, class-string<\App\Core\Console\Command>>
+     */
+    public function commands(): array;
 }

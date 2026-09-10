@@ -1,0 +1,5 @@
+#!/usr/bin/env php
+<?php
+
+// Shim, so the console reads as `php tty`. The kernel lives in bin/tty.
+require __DIR__ . '/bin/tty';

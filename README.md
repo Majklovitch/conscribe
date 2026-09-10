@@ -36,24 +36,25 @@ Now enjoy AI readme :D
 3. [Installation](#installation)
 4. [Configuration](#configuration)
 5. [Container](#container)
-6. [Middleware](#middleware)
-7. [Routing](#routing)
-8. [Controllers](#controllers)
-9. [Request](#request)
-10. [Response](#response)
-11. [Views & Layouts](#views--layouts)
-12. [Template Helpers](#template-helpers)
-13. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
-14. [Images & Media Pipeline](#images--media-pipeline)
-15. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-16. [CSRF Protection](#csrf-protection)
-17. [Database Layer](#database-layer)
-18. [Logging & Error Handling](#logging--error-handling)
-19. [Modules](#modules)
-20. [Menu](#menu)
-21. [Tracking Codes](#tracking-codes)
-22. [Security Summary](#security-summary)
-23. [Deployment](#deployment)
+6. [Console](#console)
+7. [Middleware](#middleware)
+8. [Routing](#routing)
+9. [Controllers](#controllers)
+10. [Request](#request)
+11. [Response](#response)
+12. [Views & Layouts](#views--layouts)
+13. [Template Helpers](#template-helpers)
+14. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+15. [Images & Media Pipeline](#images--media-pipeline)
+16. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+17. [CSRF Protection](#csrf-protection)
+18. [Database Layer](#database-layer)
+19. [Logging & Error Handling](#logging--error-handling)
+20. [Modules](#modules)
+21. [Menu](#menu)
+22. [Tracking Codes](#tracking-codes)
+23. [Security Summary](#security-summary)
+24. [Deployment](#deployment)
 
 ---
 
@@ -64,6 +65,7 @@ Now enjoy AI readme :D
 | **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
 | **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures; constructor dependencies autowired |
 | **Container** | PSR-11, autowiring by constructor reflection, shared entries by default, `make()` for fresh ones, cycles reported as the chain that caused them |
+| **Console** | `php tty` with autowired commands, `list`/`help`, did-you-mean on a typo, colour that turns itself off in a pipe, modules can add their own |
 | **Middleware** | Global and per-route/per-group pipeline, request rewriting, short-circuiting, class names resolved through the container |
 | **HTTP** | Immutable-ish `Request` (query/body/JSON/headers/cookies/files), `Response` with header canonicalization, response-splitting protection, cookies, and factories for HTML/JSON/redirect/no-content |
 | **Views** | Plain PHP templates with automatic header/footer layout wrapping, isolated variable scopes (`EXTR_SKIP`), path-traversal-safe resolution, reusable components |
@@ -134,7 +136,8 @@ Now enjoy AI readme :D
 ├── assets/                        # Asset sources (compiled into public/)
 │   ├── scss/                      # main.scss + partials
 │   └── js/                        # main.js
-├── bin/build.php                  # Asset build CLI
+├── bin/tty                        # Console kernel entry point
+├── tty                            # Shim, so it reads as `php tty`
 ├── public/                        # Document root
 │   ├── css/  js/  img/  media/cache/
 │   ├── index.php                  # Front controller
@@ -318,6 +321,70 @@ instead of a fatal.
 
 The router works without a container — `new Router()` still constructs
 controllers with `new` — so nothing that existed before this needs changing.
+
+
+## Console
+
+`tty` is the command line entry point — the counterpart of `public/index.php`.
+
+```bash
+php tty                    # what is there
+php tty help build         # what one of them does
+php tty build --watch
+php tty lint
+```
+
+**Writing a command.** Declare a name and a description, implement `run()`, and
+return an exit code. The container builds it, so a command may declare its
+dependencies exactly as a controller does:
+
+```php
+use App\Core\Console\{Command, Input, Output};
+
+final class ImportCommand extends Command {
+    protected string $name = 'import';
+    protected string $description = 'Imports the price list.';
+    protected string $help = 'Usage: php tty import [file]';
+
+    public function __construct(private PriceList $prices) {
+    }
+
+    public function run(Input $input, Output $output): int {
+        $count = $this->prices->import($input->argument(0, 'prices.csv'));
+
+        $output->success("Imported {$count} rows.");
+
+        return self::SUCCESS;
+    }
+}
+```
+
+Register it in `Bootstrap::kernel()`, or — from a module — by returning it from
+`commands()`, which is how a module ships work that is not a request:
+
+```php
+final class Module extends \App\Core\Module\Module {
+    public function commands(): array {
+        return [ImportCommand::class];
+    }
+}
+```
+
+**Input** understands `--env=production`, bare flags (`--watch`, `-v`, `-abc` as
+three), positional arguments, and `--` to end option parsing. A flag given with
+no value reads as `true`, so `option('watch')` tells "absent" (`null`) from
+"given". Commands are registered by class name and built only when chosen, so
+`tty list` never pays for another command's dependencies.
+
+**Output** writes to injected streams, which is what makes commands testable.
+Errors go to stderr, so `php tty something > file` still shows them. Colour is
+decided once — on for a terminal, off in a pipe or when `NO_COLOR` is set — so a
+call site never has to ask.
+
+**Exit codes** are the command's own return value: `Command::SUCCESS` (0) or
+`Command::FAILURE` (1). A mistyped command name fails with a suggestion; an
+exception from a command is reported to stderr and re-thrown, so the error
+handler still logs it with its trace.
 
 
 ## Middleware

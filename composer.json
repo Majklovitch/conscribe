@@ -41,10 +41,10 @@
         "optimize-autoloader": true
     },
     "scripts": {
-        "build": "php bin/build.php --env=production",
-        "build:dev": "php bin/build.php --env=development",
-        "build:watch": "php bin/build.php --env=development --watch",
-        "lint": "php bin/lint.php",
+        "build": "php tty build --env=production",
+        "build:dev": "php tty build --env=development",
+        "build:watch": "php tty build --env=development --watch",
+        "lint": "php tty lint",
         "test": "phpunit",
         "analyse": "phpstan analyse --memory-limit=512M",
         "fix": "php-cs-fixer fix",

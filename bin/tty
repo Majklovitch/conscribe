@@ -1,0 +1,28 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * The console entry point - the command line's public/index.php.
+ *
+ *   php tty                 what is there
+ *   php tty help build      what one of them does
+ *   php tty build --watch
+ *
+ * The `tty` in the project root is a two-line shim onto this file, so the
+ * command reads as `php tty` rather than `php bin/tty`.
+ */
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit(1);
+}
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use App\Bootstrap;
+use App\Core\Console\Kernel;
+
+// Console boot: configuration and error handling, no session and no headers.
+$bootstrap = Bootstrap::console();
+
+exit($bootstrap->kernel()->run($argv));

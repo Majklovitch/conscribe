@@ -25,6 +25,10 @@ abstract class Module implements ModuleInterface {
     public function registerRoutes(Router $router): void {
     }
 
+    public function commands(): array {
+        return [];
+    }
+
     public function helpers(): ?string {
         $file = $this->path() . '/helpers.php';
 

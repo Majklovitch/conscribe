@@ -3,6 +3,9 @@
 namespace App;
 
 use App\Core\Config;
+use App\Core\Console\Commands\BuildCommand;
+use App\Core\Console\Commands\LintCommand;
+use App\Core\Console\Kernel;
 use App\Core\Container\Container;
 use App\Core\Database\Connection;
 use App\Core\Http\Csp;
@@ -17,6 +20,7 @@ use App\Models\Menu\MenuRepository;
 use App\Services\Assets\AssetBuilder;
 use App\Services\Sitemap\SitemapService;
 use PDO;
+use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -36,6 +40,7 @@ final class Bootstrap {
     private ?Request $request = null;
     private ?Router $router = null;
     private ?Container $container = null;
+    private ?Kernel $console = null;
 
     private function __construct() {
         $this->isDevelopment = Config::get('conscribe.environment', 'production') === 'development';
@@ -88,8 +93,31 @@ final class Bootstrap {
     }
 
     public function container(): Container {
-        return $this->container
-            ?? throw new \LogicException('The container is only built by Bootstrap::web().');
+        return $this->container ??= $this->buildContainer();
+    }
+
+    /**
+     * The console, with the core commands and every module's registered.
+     *
+     * Built on demand rather than by console(), so a bin/ script that only
+     * wants configuration and error handling does not pay for it. Named
+     * kernel() because console() is already the static boot factory.
+     */
+    public function kernel(): Kernel {
+        if ($this->console !== null) {
+            return $this->console;
+        }
+
+        // The Kernel registers itself in the container, so `list` and `help`
+        // resolve to this console rather than to a fresh empty one.
+        $kernel = new Kernel($this->container());
+        $kernel->registerMany([BuildCommand::class, LintCommand::class]);
+
+        foreach ((new ModuleManager())->modules() as $module) {
+            $kernel->registerMany($module->commands());
+        }
+
+        return $this->console = $kernel;
     }
 
     public function run(): void {
@@ -177,12 +205,23 @@ final class Bootstrap {
      * Application services need no registration at all; the container
      * autowires any concrete class from its constructor.
      */
-    private function buildContainer(Request $request, Session $session): Container {
+    private function buildContainer(?Request $request = null, ?Session $session = null): Container {
         $container = new Container();
 
-        $container->instance(Request::class, $request);
-        $container->instance(Session::class, $session);
+        // Absent on the command line, where there is no request and starting a
+        // session would be meaningless. A command asking for either gets a
+        // clear "not registered" rather than a fabricated empty one.
+        if ($request !== null) {
+            $container->instance(Request::class, $request);
+        }
+        if ($session !== null) {
+            $container->instance(Session::class, $session);
+        }
+
         $container->instance(Container::class, $container);
+        // Bound under the interface as well, so a command or a service can ask
+        // for the standard type rather than this implementation.
+        $container->instance(ContainerInterface::class, $container);
 
         $container->bind(LoggerInterface::class, static fn (): LoggerInterface => Log::get());
         $container->bind(PDO::class, static fn (): PDO => Connection::get());
