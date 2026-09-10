@@ -64,6 +64,21 @@ final class ThrowingCommand extends Command {
     }
 }
 
+/** Depends on something the container cannot produce. */
+final class NeedsUnbuildable extends Command {
+    protected string $name = 'unbuildable';
+    protected string $description = 'Cannot be built.';
+
+    public function __construct(public string $dsn) {
+    }
+
+    public function run(Input $input, Output $output): int {
+        $output->line($this->dsn);
+
+        return self::SUCCESS;
+    }
+}
+
 final class Nameless extends Command {
     public function run(Input $input, Output $output): int {
         return self::SUCCESS;
@@ -245,18 +260,41 @@ final class ConsoleTest extends TestCase {
         self::assertSame(Command::FAILURE, $this->kernel()->run(['tty', 'help'], $this->output));
     }
 
-    #[TestDox('an exception from a command is reported and re-thrown for the log')]
-    public function testCommandExceptionsReachTheErrorHandler(): void {
-        // Reported to stderr so a script sees something, but re-thrown so the
-        // registered handler logs it with its trace - swallowing it would turn
-        // a crash into a silent exit code.
-        $this->expectException(\DomainException::class);
+    #[TestDox('a crashing command exits non-zero')]
+    public function testCommandExceptionsBecomeAFailureExitCode(): void {
+        // The uncaught-exception handler prints the failure but leaves the exit
+        // status at 0, so re-throwing would make a crash look like success -
+        // `tty migrate && deploy` would carry on after a failed migration.
+        $status = $this->kernel()->run(['tty', 'boom'], $this->output);
 
-        try {
-            $this->kernel()->run(['tty', 'boom'], $this->output);
-        } finally {
-            self::assertStringContainsString('something broke', $this->stderr());
-        }
+        self::assertSame(Command::FAILURE, $status);
+        self::assertStringContainsString('something broke', $this->stderr());
+    }
+
+    #[TestDox('the stack trace is shown only when -v is asked for')]
+    public function testTraceIsOptional(): void {
+        $this->kernel()->run(['tty', 'boom'], $this->output);
+        self::assertStringNotContainsString('#0', $this->stdout());
+        self::assertStringContainsString('-v for the stack trace', $this->stdout());
+
+        $this->setUp();
+        $this->kernel()->run(['tty', 'boom', '-v'], $this->output);
+        self::assertStringContainsString('#0', $this->stdout());
+    }
+
+    #[TestDox('a command whose dependencies cannot be built fails with a sentence')]
+    public function testUnbuildableCommandIsNotACrash(): void {
+        $kernel = new Kernel();
+        $kernel->register(NeedsGreeting::class);
+
+        // Greeting has a default, so make it genuinely unresolvable instead.
+        $kernel->register(NeedsUnbuildable::class);
+
+        $status = $kernel->run(['tty', 'unbuildable'], $this->output);
+
+        self::assertSame(Command::FAILURE, $status);
+        self::assertStringContainsString('Cannot resolve', $this->stderr());
+        self::assertStringNotContainsString('#0', $this->stdout(), 'no stack trace for a wiring problem');
     }
 
     public function testRegisteringANamelessCommandIsRefused(): void {

@@ -5,6 +5,8 @@ namespace App\Core\Console;
 use App\Core\Console\Commands\HelpCommand;
 use App\Core\Console\Commands\ListCommand;
 use App\Core\Container\Container;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
@@ -156,20 +158,65 @@ final class Kernel {
         }
 
         try {
-            return $this->resolve($name)->run($input, $output);
-        } catch (ConsoleException $e) {
-            // The console's own complaints are the command's fault, not the
-            // user's, but they are still just a message - no stack trace.
+            $command = $this->resolve($name);
+        } catch (ConsoleException | ContainerExceptionInterface $e) {
+            // The command could not be built: an unknown name, or a dependency
+            // that cannot be satisfied - no database configured, a binding
+            // missing. That is a configuration problem, so it gets a sentence
+            // rather than a stack trace.
             $output->error($e->getMessage());
 
             return Command::FAILURE;
-        } catch (Throwable $e) {
-            // Anything else is a real failure. The message goes to stderr so a
-            // script can see it, and the exception is re-thrown into the
-            // error handler, which logs it with its trace.
-            $output->error(sprintf('%s: %s', $e::class, $e->getMessage()));
+        }
 
-            throw $e;
+        try {
+            return $command->run($input, $output);
+        } catch (Throwable $e) {
+            return $this->reportFailure($e, $input, $output);
+        }
+    }
+
+    /**
+     * Turns an exception out of a command into a message and an exit code.
+     *
+     * Deliberately not a re-throw. The uncaught-exception handler prints the
+     * failure but leaves the exit status at 0, and a console whose crash looks
+     * like success is worse than useless - `tty migrate && deploy` would carry
+     * on after a failed migration. So the exception is logged here, where the
+     * trace is kept, and the process exits non-zero.
+     *
+     * The terminal gets one line unless -v was asked for, because a stack trace
+     * is rarely what you want to read first and never what a script wants.
+     */
+    private function reportFailure(Throwable $e, Input $input, Output $output): int {
+        $this->logger()?->error($e->getMessage(), ['exception' => $e]);
+
+        $output->error(sprintf('%s: %s', $e::class, $e->getMessage()));
+
+        if ($input->hasOption('v') || $input->hasOption('verbose')) {
+            $output->comment($e->getTraceAsString());
+        } else {
+            $output->comment('Run it again with -v for the stack trace; it is in the log either way.');
+        }
+
+        return Command::FAILURE;
+    }
+
+    /**
+     * The application's logger, when there is one.
+     *
+     * Resolved rather than injected so a standalone Kernel - a test, a
+     * throwaway script - needs no logging set up at all.
+     */
+    private function logger(): ?LoggerInterface {
+        try {
+            return $this->container->has(LoggerInterface::class)
+                ? $this->container->get(LoggerInterface::class)
+                : null;
+        } catch (Throwable) {
+            // A logger that cannot itself be built must not replace the failure
+            // being reported with its own.
+            return null;
         }
     }
 

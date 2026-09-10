@@ -73,8 +73,10 @@ final class MakeMigrationCommand extends Command {
         return <<<'PHP'
             <?php
 
+            // A migration file declares no namespace, so PDO is already the
+            // global one - a `use PDO;` here would warn on every run that it
+            // has no effect.
             use App\Core\Database\Migrations\Migration;
-            use PDO;
 
             return new class extends Migration {
                 public function up(PDO $db): void {
