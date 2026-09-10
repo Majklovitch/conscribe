@@ -59,7 +59,7 @@ Now enjoy AI readme :D
 
 | Area | What you get |
 | --- | --- |
-| **Routing** | Explicit `GET`/`POST` route table, `{param}` placeholders, typed parameter casting, automatic `HEAD` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
+| **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
 | **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures |
 | **HTTP** | Immutable-ish `Request` (query/body/JSON/headers/cookies/files), `Response` with header canonicalization, response-splitting protection, cookies, and factories for HTML/JSON/redirect/no-content |
 | **Views** | Plain PHP templates with automatic header/footer layout wrapping, isolated variable scopes (`EXTR_SKIP`), path-traversal-safe resolution, reusable components |
@@ -267,6 +267,18 @@ $router->get('', [WebController::class, 'index']);
 $router->get('test', [WebController::class, 'test']);
 $router->get('clanek/{slug}', [ArticleController::class, 'show']);
 $router->post('kontakt', [ContactController::class, 'send']);
+
+$router->put('api/order/{id}', [OrderApi::class, 'replace']);
+$router->patch('api/order/{id}', [OrderApi::class, 'update']);
+$router->delete('api/order/{id}', [OrderApi::class, 'destroy']);
+```
+
+**Methods.** `GET`, `POST`, `PUT`, `PATCH` and `DELETE` each have a helper; anything else is
+rejected when the route is registered, rather than becoming a table no request will look in.
+`map()` registers one URL under several methods at once:
+
+```php
+$router->map(['PUT', 'PATCH'], 'api/order/{id}', [OrderApi::class, 'update']);
 ```
 
 **Placeholders.** `{name}` matches one path segment and is passed to the action by parameter name, not position.
@@ -285,7 +297,9 @@ public function send(Request $request, Session $session) { … }
 
 **HEAD** requests are routed through the `GET` table and sent without a body.
 
-**405 vs 404.** If a path is registered under a different method, the router answers `405` with an `Allow` header listing the real methods, rather than a misleading `404`.
+**OPTIONS** is answered from the route table itself: `204` with an `Allow` header listing what the path is registered under, or `404` when it is registered under nothing. The `Access-Control-*` headers a browser preflight also wants are not sent — CORS is a policy the application owns, not the router.
+
+**405 vs 404.** If a path is registered under a different method, the router answers `405` with an `Allow` header listing the real methods, rather than a misleading `404`. `HEAD` and `OPTIONS` appear in that list because the router answers them, even though neither has a route table of its own.
 
 **Static files** ending in a known asset extension never reach a controller — the router short-circuits them with a plain-text 404, since the web server should have served them.
 
@@ -634,9 +648,16 @@ Render the hidden field:
 </form>
 ```
 
-**Every POST route is verified by the router**, before the action runs — a missing or wrong token
-returns 419 through the normal error page. There is nothing to call. An endpoint that authenticates
-some other way opts out explicitly, per route or per group:
+**Every state-changing route is verified by the router** — `POST`, `PUT`, `PATCH` and `DELETE`
+alike — before the action runs; a missing or wrong token returns 419 through the normal error
+page. There is nothing to call. The token is read from the `csrf_token` body field first and then
+from the `X-CSRF-Token` header, and `Request` decodes a JSON body whatever the method, so a
+`fetch()` with either works.
+
+`PUT`, `PATCH` and `DELETE` are not reachable from an HTML form, but they are reachable from
+`fetch()` on an authenticated session, which is exactly what CSRF is about. An endpoint that
+authenticates some other way — a token API sends no cookies — opts out explicitly, per route or
+per group:
 
 ```php
 $router->post('api/webhook', [ApiController::class, 'webhook'], ['csrf' => false]);
@@ -897,7 +918,7 @@ The front end also ships **Cookie Consent v3** (`public/js/cookieconsent.umd.js`
 | Threat | Mitigation |
 | --- | --- |
 | XSS | `esc()` with `ENT_QUOTES \| ENT_SUBSTITUTE`; SVG sanitization strips scripts, `foreignObject`, `on*` handlers and `javascript:`/`data:` URIs |
-| CSRF | Random 32-byte token, `hash_equals()` comparison, POST field or `X-CSRF-TOKEN` header; **verified by the router on every POST** unless the route sets `['csrf' => false]`, 419 otherwise |
+| CSRF | Random 32-byte token, `hash_equals()` comparison, body field or `X-CSRF-TOKEN` header; **verified by the router on every state-changing request** (`POST`, `PUT`, `PATCH`, `DELETE`) unless the route sets `['csrf' => false]`, 419 otherwise |
 | Session fixation | `use_strict_mode`, interval-based ID rotation, manual `regenerate()` |
 | Session hijacking | `HttpOnly`, `SameSite`, `Secure` (auto-detected), cookies-only IDs, non-default cookie name |
 | SQL injection | Prepared statements throughout, identifier whitelisting, emulated prepares disabled |

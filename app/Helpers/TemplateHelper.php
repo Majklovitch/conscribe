@@ -333,8 +333,9 @@ function validate_csrf(?\App\Core\Http\Request $request = null): bool {
  * failure travels through the router like any other, gets the application's
  * error page and lands in the log - and the function stays testable.
  *
- * Since the router verifies every POST by default (see Router::handle), calling
- * this by hand is only needed on routes that opted out with ['csrf' => false].
+ * Since the router verifies every state-changing request by default - POST,
+ * PUT, PATCH and DELETE alike (see Router::handle) - calling this by hand is
+ * only needed on routes that opted out with ['csrf' => false].
  *
  * @throws \App\Core\Http\CsrfException
  */
