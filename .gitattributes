@@ -22,3 +22,9 @@
 *.ico    binary
 *.woff   binary
 *.woff2  binary
+
+# The console entry points have no extension, the way `artisan` and
+# `bin/console` have none, so the rules above do not reach them. A CRLF in a
+# shebang line makes the script unrunnable as ./tty on a Unix host.
+tty      text eol=lf
+bin/tty  text eol=lf
