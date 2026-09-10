@@ -9,3 +9,4 @@ PROPOSALS.md
 # Asset pipeline - source maps are a development-only artifact
 /public/css/*.map
 /public/js/*.map
+.phpunit.cache/

@@ -10,6 +10,11 @@
             "app/Helpers/TemplateHelper.php"
         ]
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
     "authors": [
         {
             "name": "Majklovitch",
@@ -38,7 +43,8 @@
         "build": "php bin/build.php --env=production",
         "build:dev": "php bin/build.php --env=development",
         "build:watch": "php bin/build.php --env=development --watch",
-        "lint": "php bin/lint.php"
+        "lint": "php bin/lint.php",
+        "test": "phpunit"
     },
     "scripts-descriptions": {
         "build": "Compile SCSS and minify JS into public/ (production output).",

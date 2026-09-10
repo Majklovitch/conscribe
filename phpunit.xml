@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         cacheDirectory=".phpunit.cache"
+         colors="true"
+         executionOrder="depends,defects"
+         beStrictAboutOutputDuringTests="true"
+         failOnRisky="true"
+         failOnWarning="true"
+         failOnNotice="true"
+         failOnDeprecation="true">
+
+    <testsuites>
+        <!--
+            Core is the framework itself and must stay runnable without a
+            database, a session or a web server. Feature tests (application
+            controllers, repositories) get their own suite once they need one,
+            so that running just the core suite stays fast and dependency-free.
+        -->
+        <testsuite name="core">
+            <directory>tests/Core</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+        <exclude>
+            <!-- Templates, not code: including them only skews the numbers. -->
+            <directory>app/Views</directory>
+        </exclude>
+    </source>
+</phpunit>
