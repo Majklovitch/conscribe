@@ -193,15 +193,43 @@ final class Validator {
             'max' => $this->size($value) <= (float) ($args[0] ?? 0),
             'between' => $this->size($value) >= (float) ($args[0] ?? 0)
                 && $this->size($value) <= (float) ($args[1] ?? 0),
-            'in' => in_array((string) $this->scalar($value), $args, true),
-            'not_in' => !in_array((string) $this->scalar($value), $args, true),
-            'regex' => is_string($value) && preg_match($args[0] ?? '//', $value) === 1,
-            'same' => $value === ($this->data[$args[0] ?? ''] ?? null),
-            'different' => $value !== ($this->data[$args[0] ?? ''] ?? null),
+            // A non-scalar cannot be one of a list of strings. Casting it
+            // would make an array match an empty allowed value, which is a
+            // silent pass - the one outcome a validator must never produce.
+            'in' => is_scalar($value) && in_array((string) $value, $args, true),
+            'not_in' => is_scalar($value) && !in_array((string) $value, $args, true),
+            'regex' => is_string($value)
+                && preg_match($this->argument($rule, $args, 0), $value) === 1,
+            'same' => $value === ($this->data[$this->argument($rule, $args, 0)] ?? null),
+            'different' => $value !== ($this->data[$this->argument($rule, $args, 0)] ?? null),
             'confirmed' => $value === ($this->data[$field . '_confirmation'] ?? null),
             'accepted' => in_array($value, [true, 1, '1', 'yes', 'on'], true),
             default => throw new InvalidArgumentException(sprintf('There is no validation rule named "%s".', $rule)),
         };
+    }
+
+    /**
+     * A rule's required argument.
+     *
+     * Written out rather than defaulted, because the defaults are dangerous:
+     * `regex` without a pattern would fall back to `//`, which matches
+     * everything, so a typo like `'code' => 'required|regex'` would accept any
+     * input while looking as though it checked it. A rule that cannot work is
+     * a mistake in the rules, and belongs with the unknown-rule error.
+     *
+     * @param array<int, string> $args
+     */
+    private function argument(string $rule, array $args, int $position): string {
+        return $args[$position]
+            ?? throw new InvalidArgumentException(sprintf(
+                'The "%s" rule needs an argument, e.g. %s.',
+                $rule,
+                match ($rule) {
+                    'regex' => 'regex:/^[a-z]+$/',
+                    'same', 'different' => $rule . ':other_field',
+                    default => $rule . ':value',
+                },
+            ));
     }
 
     /**
@@ -216,10 +244,6 @@ final class Validator {
             is_bool($value) => $value ? 1.0 : 0.0,
             default => 0.0,
         };
-    }
-
-    private function scalar(mixed $value): string|int|float|bool|null {
-        return is_scalar($value) ? $value : null;
     }
 
     private function isInteger(mixed $value): bool {

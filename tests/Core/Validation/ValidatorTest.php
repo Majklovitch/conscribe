@@ -220,6 +220,32 @@ final class ValidatorTest extends TestCase {
         self::assertFalse(Validator::make(['start' => 5, 'end' => 2], $rules)->passes());
     }
 
+    #[TestDox('a rule missing its argument is refused, not defaulted')]
+    public function testARuleWithoutItsArgumentThrows(): void {
+        // `regex` with no pattern used to fall back to `//`, which matches
+        // everything - so a typo accepted any input while looking checked.
+        // A silent pass is the one outcome a validator must never produce.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The "regex" rule needs an argument');
+
+        Validator::make(['a' => 'anything'], ['a' => 'regex'])->passes();
+    }
+
+    #[TestDox('same and different need a field to compare against')]
+    public function testSameWithoutItsArgumentThrows(): void {
+        $this->expectException(InvalidArgumentException::class);
+
+        Validator::make(['a' => 'x'], ['a' => 'same'])->passes();
+    }
+
+    #[TestDox('a non-scalar is not coerced into matching an allowed value')]
+    public function testInRejectsNonScalars(): void {
+        // Casting an array to string yields '', which would have matched an
+        // empty entry in the allowed list.
+        self::assertFalse(Validator::make(['a' => ['x']], ['a' => 'in:,admin'])->passes());
+        self::assertFalse(Validator::make(['a' => ['x']], ['a' => 'not_in:root'])->passes());
+    }
+
     #[TestDox('a misspelled rule name is refused rather than silently passing')]
     public function testUnknownRuleThrows(): void {
         $this->expectException(InvalidArgumentException::class);
