@@ -6,7 +6,36 @@ return [
         'author' => 'Majklovitch', // make this whatever you want, i dont mind if you copy code
         'environment' => 'development', // 'development' | 'production'
         'base_url' => 'http://localhost:8080/', // the base URL of your site, used for generating absolute URLs
+
+        // Reverse proxies whose X-Forwarded-* headers may be believed. Anyone
+        // can send those headers, so an empty list (the default) means the
+        // application trusts only what the web server itself reports - see
+        // Request::isSecure() and Request::getClientIp(). Entries are IPs or
+        // CIDR blocks, IPv4 and IPv6:
+        //
+        //   'trusted_proxies' => ['10.0.0.0/8', '2400:cb00::/32'],
+        'trusted_proxies' => [],
                                                // and for the <loc> entries in /sitemap.xml
+    ],
+    'security' => [
+        // Content-Security-Policy. Empty = no CSP header at all, which is how
+        // the framework behaved before this key existed. '{nonce}' is replaced
+        // with a fresh per-request nonce; render it into your inline scripts
+        // with the csp_nonce_attr() template helper.
+        'csp' => '',
+        // Ship a new policy report-only first: violations show up in the
+        // browser console and nothing is actually blocked. Flip to false once
+        // the console is quiet.
+        'csp_report_only' => true,
+        //
+        // A starting point for a site using the built-in tracking codes:
+        //
+        // 'csp' => "default-src 'self'; "
+        //     . "script-src 'self' 'nonce-{nonce}' https://www.googletagmanager.com https://c.seznam.cz https://connect.facebook.net; "
+        //     . "style-src 'self' 'unsafe-inline'; "
+        //     . "img-src 'self' data: https://www.facebook.com https://www.google-analytics.com; "
+        //     . "connect-src 'self' https://www.google-analytics.com; "
+        //     . "font-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; object-src 'none'",
     ],
     // sitemap.xml is generated from the route table - there is nothing to configure
     // here. Which pages are listed is decided by the route file (app/Config/routes/),

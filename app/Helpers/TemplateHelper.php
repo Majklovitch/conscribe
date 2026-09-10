@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\Config;
+use App\Core\Http\Csp;
 use App\Core\Http\Session;
 
 /**
@@ -173,6 +174,26 @@ function svg(string $name, array $attrs = []): string {
 }
 
 /**
+ * The Content-Security-Policy nonce of the current request, ready to drop into
+ * a tag: <script<?= csp_nonce_attr() ?>>. Empty when no policy is configured,
+ * so a site without CSP renders exactly as before.
+ */
+function csp_nonce(): string {
+    $policy = Config::get('security.csp');
+
+    // Only when the configured policy carries a {nonce} placeholder. A nonce
+    // attribute that appears in no policy is at best noise, and at worst looks
+    // like the script is allowed when it is not.
+    return is_string($policy) && str_contains($policy, '{nonce}') ? Csp::nonce() : '';
+}
+
+function csp_nonce_attr(): string {
+    $nonce = csp_nonce();
+
+    return $nonce === '' ? '' : ' nonce="' . esc($nonce) . '"';
+}
+
+/**
  * Renders the tracking codes (GA4, Gtag, AdWords, Sklik, Facebook Pixel)
  * into the header.
  */
@@ -186,6 +207,7 @@ function renderTrackingCodes(): string {
     }
 
     $html = '';
+    $nonce = csp_nonce_attr();
 
     // --- Google Tag (gtag.js) Configuration (GA4, Gtag, AdWords) ---
     $googleIds = [];
@@ -202,8 +224,8 @@ function renderTrackingCodes(): string {
     if (!empty($googleIds)) {
         $primaryId = $googleIds[0];
         $html .= "\n    <!-- Global site tag (gtag.js) - Google Analytics / Ads -->\n";
-        $html .= "    <script async src=\"https://www.googletagmanager.com/gtag/js?id=" . esc($primaryId) . "\"></script>\n";
-        $html .= "    <script>\n";
+        $html .= "    <script{$nonce} async src=\"https://www.googletagmanager.com/gtag/js?id=" . esc($primaryId) . "\"></script>\n";
+        $html .= "    <script{$nonce}>\n";
         $html .= "        window.dataLayer = window.dataLayer || [];\n";
         $html .= "        function gtag(){dataLayer.push(arguments);}\n";
         $html .= "        gtag('js', new Date());\n";
@@ -218,8 +240,8 @@ function renderTrackingCodes(): string {
         // The value goes into JS as a numeric literal, hence the hard cast to int.
         $sklikId = (int) trim((string) $tracking['sklik_id']);
         $html .= "\n    <!-- Sklik Retargeting -->\n";
-        $html .= "    <script type=\"text/javascript\" src=\"https://c.seznam.cz/js/rc.js\"></script>\n";
-        $html .= "    <script type=\"text/javascript\">\n";
+        $html .= "    <script{$nonce} type=\"text/javascript\" src=\"https://c.seznam.cz/js/rc.js\"></script>\n";
+        $html .= "    <script{$nonce} type=\"text/javascript\">\n";
         $html .= "        /* <![CDATA[ */\n";
         $html .= "        var seznam_retargeting_id = " . $sklikId . ";\n";
         $html .= "        if (window.rc && window.rc.retargeting) {\n";
@@ -233,7 +255,7 @@ function renderTrackingCodes(): string {
     if (!empty($tracking['fb_pixel_id'])) {
         $fbPixelId = trim($tracking['fb_pixel_id']);
         $html .= "\n    <!-- Facebook Pixel Code -->\n";
-        $html .= "    <script>\n";
+        $html .= "    <script{$nonce}>\n";
         $html .= "        !function(f,b,e,v,n,t,s)\n";
         $html .= "        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?\n";
         $html .= "        n.callMethod.apply(n,arguments):n.queue.push(arguments)};\n";
@@ -305,16 +327,19 @@ function validate_csrf(?\App\Core\Http\Request $request = null): bool {
 }
 
 /**
- * Sends a 403 and terminates the request when the CSRF token is invalid.
+ * Aborts the request when the CSRF token is invalid.
+ *
+ * It throws instead of sending a response and calling exit(): that way the
+ * failure travels through the router like any other, gets the application's
+ * error page and lands in the log - and the function stays testable.
+ *
+ * Since the router verifies every POST by default (see Router::handle), calling
+ * this by hand is only needed on routes that opted out with ['csrf' => false].
+ *
+ * @throws \App\Core\Http\CsrfException
  */
-function check_csrf(?\App\Core\Http\Request $request = null, ?\App\Core\Http\Response $response = null): void {
+function check_csrf(?\App\Core\Http\Request $request = null): void {
     if (!validate_csrf($request)) {
-        if ($response === null) {
-            $response = new \App\Core\Http\Response();
-        }
-        $response->setStatusCode(403);
-        $response->setContent("<h1>403 Forbidden</h1><p>CSRF token validation failed. Request blocked.</p>");
-        $response->send();
-        exit;
+        throw new \App\Core\Http\CsrfException('CSRF token validation failed.');
     }
 }

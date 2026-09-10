@@ -2,6 +2,7 @@
 namespace App;
 
 use App\Core\Config;
+use App\Core\Http\Csp;
 use App\Core\Http\ErrorPage;
 use App\Core\Http\Request;
 use App\Core\Http\Router;
@@ -93,8 +94,8 @@ final class Bootstrap {
         // The template is picked by the status code (app/Views/errors/*.php); the
         // menu and the logger are built only once something actually fails, so a
         // successful request pays for neither.
-        $this->errorPage = new ErrorPage(static fn (): array => [
-            'menuItems' => (new MenuRepository())->all(),
+        $this->errorPage = new ErrorPage(static fn (Request $request): array => [
+            'menuItems' => (new MenuRepository($request))->all(),
         ]);
 
         // In development this hands the error, exception and shutdown handlers to
@@ -131,6 +132,13 @@ final class Bootstrap {
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
+
+        // Sent only when 'security.csp' is configured, and report-only unless
+        // the site says otherwise - see App\Core\Http\Csp.
+        $csp = Csp::header();
+        if ($csp !== null) {
+            header($csp[0] . ': ' . $csp[1]);
+        }
     }
 
     private function bootHttp(): void {

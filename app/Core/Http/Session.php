@@ -289,7 +289,10 @@ class Session
             return [];
         }
 
-        $flash = $_SESSION[self::FLASH_KEY]['old'] + $_SESSION[self::FLASH_KEY]['new'];
+        // Not assumed to exist: destroy() empties $_SESSION and resets the
+        // aged flag, so afterStart() may not have rebuilt the queues yet.
+        $queues = $this->flashQueues();
+        $flash = $queues['old'] + $queues['new'];
         unset($flash[self::OLD_INPUT_KEY]);
 
         return $flash;
@@ -306,10 +309,15 @@ class Session
             return $this;
         }
 
-        $old = $_SESSION[self::FLASH_KEY]['old'];
-        $keep = $keys === null ? $old : array_intersect_key($old, array_flip($keys));
+        $queues = $this->flashQueues();
+        $keep = $keys === null
+            ? $queues['old']
+            : array_intersect_key($queues['old'], array_flip($keys));
 
-        $_SESSION[self::FLASH_KEY]['new'] = $keep + $_SESSION[self::FLASH_KEY]['new'];
+        $_SESSION[self::FLASH_KEY] = [
+            'old' => $queues['old'],
+            'new' => $keep + $queues['new'],
+        ];
 
         return $this;
     }
@@ -383,6 +391,21 @@ class Session
     }
 
     // --- Internals ----------------------------------------------------------
+
+    /**
+     * The two flash queues, normalized. Both are always arrays, whatever state
+     * $_SESSION happens to be in.
+     *
+     * @return array{old: array<string, mixed>, new: array<string, mixed>}
+     */
+    private function flashQueues(): array {
+        $flash = $_SESSION[self::FLASH_KEY] ?? [];
+
+        return [
+            'old' => is_array($flash['old'] ?? null) ? $flash['old'] : [],
+            'new' => is_array($flash['new'] ?? null) ? $flash['new'] : [],
+        ];
+    }
 
     /**
      * Ages the flash queues and rotates the ID if due. Runs once per request.

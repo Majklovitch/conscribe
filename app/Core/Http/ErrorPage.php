@@ -26,16 +26,17 @@ class ErrorPage {
     /**
      * Extra template variables (the menu, for instance). It is a callable and
      * not an array because nothing is needed on a successful request - the
-     * application must not pay for the error page it never renders.
+     * application must not pay for the error page it never renders. It receives
+     * the failing request, so the data can depend on it.
      *
-     * @var (callable(): array)|null
+     * @var (callable(Request): array)|null
      */
     private $viewData;
 
     private ?LoggerInterface $logger;
 
     /**
-     * @param (callable(): array)|null $viewData extra variables for the template
+     * @param (callable(Request): array)|null $viewData extra variables for the template
      * @param LoggerInterface|null     $logger   null = default logger from the configuration (lazily)
      */
     public function __construct(?callable $viewData = null, ?LoggerInterface $logger = null) {
@@ -55,7 +56,7 @@ class ErrorPage {
                     'pageTitle' => "Error {$code}",
                     'code'      => $code,
                     'message'   => $public,
-                ] + $this->extraData());
+                ] + $this->extraData($request));
 
                 return Response::html($html, $code);
             } catch (Throwable $e) {
@@ -98,13 +99,13 @@ class ErrorPage {
      * caused by an unreachable database must not fail again while fetching
      * the menu for the page reporting it.
      */
-    protected function extraData(): array {
+    protected function extraData(Request $request): array {
         if ($this->viewData === null) {
             return [];
         }
 
         try {
-            $data = ($this->viewData)();
+            $data = ($this->viewData)($request);
         } catch (Throwable) {
             return [];
         }
@@ -136,7 +137,7 @@ class ErrorPage {
     protected function log(int $code, string $message, Request $request): void {
         $level = match (true) {
             $code >= 500 => 'error',
-            $code === 405 => 'warning',
+            $code === 405, $code === 419 => 'warning',
             default => 'info',
         };
 

@@ -138,7 +138,7 @@ $router-&gt;<span class="c-key">get</span>(<span class="c-key">'contact'</span>,
                     </tr>
                     <tr>
                         <td><code>csrf_field()</code></td>
-                        <td>A hidden token field; verify it with <code>check_csrf()</code>.</td>
+                        <td>A hidden token field. Every POST route is verified by the router automatically.</td>
                     </tr>
                     <tr>
                         <td><code>flash()</code> / <code>old()</code></td>

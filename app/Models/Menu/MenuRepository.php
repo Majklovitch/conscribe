@@ -2,13 +2,24 @@
 
 namespace App\Models\Menu;
 
+use App\Core\Http\Request;
+
 class MenuRepository {
     /**
      * @var MenuItem[]
      */
     private array $items = [];
 
-    public function __construct() {
+    /**
+     * The request the menu is built for. Without one nothing can be active -
+     * the menu is then a plain list of links, which is what a CLI or a test
+     * that never dispatched a request should get.
+     */
+    private ?Request $request;
+
+    public function __construct(?Request $request = null) {
+        $this->request = $request;
+
         $this->add('Home', '/');
         $this->add("Test", '/test');
         $this->add("KKt", "https://example.org/");
@@ -93,13 +104,17 @@ class MenuRepository {
     }
 
     public function isLinkActive(string $link): bool {
+        if ($this->request === null) {
+            return false;
+        }
+
         if (str_starts_with($link, '/#') || str_starts_with($link, '#')) {
             return false;
         }
 
         // Links pointing outside this web app are never active.
         $host = parse_url($link, PHP_URL_HOST);
-        if ($host !== null && $host !== ($_SERVER['HTTP_HOST'] ?? null)) {
+        if ($host !== null && $host !== $this->request->getHeader('host')) {
             return false;
         }
 
@@ -108,10 +123,11 @@ class MenuRepository {
             return false;
         }
 
-        $currentPage = defined('CURRENT_PAGE') ? CURRENT_PAGE : 'home';
-
-        $currentUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
-        $currentUri = '/' . trim($currentUri, '/');
+        // The path comes from the Request, not from REQUEST_URI, so a module
+        // that rewrote it (stripping a language prefix, say) is reflected here
+        // instead of the menu matching against the untouched URL.
+        $currentPage = $this->request->getFirstSegment();
+        $currentUri = '/' . $this->request->getPath();
 
         $linkUri = parse_url($link, PHP_URL_PATH) ?? '/';
         $linkUri = '/' . trim($linkUri, '/');

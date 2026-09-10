@@ -5,20 +5,29 @@ namespace App\Controllers;
 use App\Core\Config;
 use App\Core\Http\Controller;
 use App\Models\Menu\MenuRepository;
-use PHPUnit\Framework\Exception;
 
 class WebController extends Controller {
-    protected array $menuItems;
+    /**
+     * Built on first use, because the Router only injects the Request after
+     * the controller is constructed - and the menu needs the request to know
+     * which item is the active one.
+     *
+     * @var \App\Models\Menu\MenuItem[]|null
+     */
+    protected ?array $menuItems = null;
 
-    public function __construct() {
-        $this->menuItems = (new MenuRepository())->all();
+    /**
+     * @return \App\Models\Menu\MenuItem[]
+     */
+    protected function menuItems(): array {
+        return $this->menuItems ??= (new MenuRepository($this->request()))->all();
     }
 
     public function index() {
         return $this->render('home', [
             'pageTitle' => 'Home',
             'pageDescription' => 'ConscribePHP - a lightweight PHP MVC base with a router, templates, CSRF protection, a database layer, logging, an image pipeline, a module system and security headers.',
-            'menuItems' => $this->menuItems,
+            'menuItems' => $this->menuItems(),
             'appVersion' => (string) Config::get('conscribe.ver', ''),
             'features' => $this->features(),
         ]);
@@ -28,7 +37,7 @@ class WebController extends Controller {
         return $this->render('test', [
             'pageTitle' => 'Test page',
             'pageDescription' => 'This page is here to check that the MVC framework works as expected.',
-            'menuItems' => $this->menuItems,
+            'menuItems' => $this->menuItems(),
             'appVersion' => (string) Config::get('conscribe.ver', ''),
         ]);
     }

@@ -5,7 +5,7 @@ ABOUT.md
 /.claude/
 /public/media/cache/*
 !/public/media/cache/.htaccess
-
+PROPOSALS.md
 # Asset pipeline - source maps are a development-only artifact
 /public/css/*.map
 /public/js/*.map

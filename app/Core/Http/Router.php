@@ -167,11 +167,6 @@ class Router {
         $uri = $request->getPath();
         $method = $request->getMethod();
 
-        // CURRENT_PAGE is defined for backwards compatibility with templates and the menu.
-        if (!defined('CURRENT_PAGE')) {
-            define('CURRENT_PAGE', $request->getFirstSegment());
-        }
-
         // Static files never belong here (the web server handles them),
         // so answer them right away without rendering any template.
         if (preg_match('/\.(?:css|js|png|jpg|jpeg|gif|svg|webp|ico|woff2?)$/i', $uri)) {
@@ -183,6 +178,10 @@ class Router {
 
         foreach ($this->routes[$lookupMethod] ?? [] as $route) {
             if (preg_match($route['pattern'], $uri, $matches)) {
+                if (!$this->passesCsrf($route, $request)) {
+                    return $this->error(419, 'The form expired or the CSRF token was missing.', $request);
+                }
+
                 // Named parameters only; the numeric indexes from preg_match are dropped.
                 $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
 
@@ -198,6 +197,33 @@ class Router {
         }
 
         return $this->error(404, 'Page not found.', $request);
+    }
+
+    /**
+     * Verifies the CSRF token of a state-changing request.
+     *
+     * Checked by default rather than on request: a forgotten check_csrf() in
+     * one action would otherwise silently leave that form unprotected, and
+     * nothing about the code would look wrong. An endpoint that authenticates
+     * some other way opts out explicitly, per route or per group:
+     *
+     *   $router->post('api/webhook', $handler, ['csrf' => false]);
+     *
+     * The token is read from the body field first and then from the header, so
+     * both a plain form post and a fetch() work.
+     */
+    private function passesCsrf(array $route, Request $request): bool {
+        if ($request->getMethod() !== 'POST') {
+            return true;
+        }
+
+        if (($route['options']['csrf'] ?? true) === false) {
+            return true;
+        }
+
+        $token = $request->post('csrf_token') ?? $request->getHeader('x-csrf-token') ?? '';
+
+        return $this->session->validateToken(is_string($token) ? $token : '');
     }
 
     /**
@@ -284,6 +310,10 @@ class Router {
             $result = $invoke($args);
         } catch (ViewNotFoundException) {
             return $this->error(404, 'Page not found.', $request);
+        } catch (CsrfException $e) {
+            // Thrown by check_csrf() on a route that opted out of the automatic
+            // verification and does the check itself.
+            return $this->error(419, $e->getMessage(), $request);
         }
 
         if ($result instanceof Response) {

@@ -368,8 +368,19 @@ $request->getHeaders();
 $request->getRawBody();
 
 $request->getClientIp();            // REMOTE_ADDR
-$request->getClientIp(true);        // trusts X-Forwarded-For — only behind your own proxy
-Request::isSecure();                // handles Cloudflare, Azure, X-Forwarded-Proto, ports
+$request->getClientIp(true);        // X-Forwarded-For, but only from a trusted proxy
+Request::isSecure();                // HTTPS / REQUEST_SCHEME / port 443, plus proxy headers
+```
+
+**Trusted proxies.** `X-Forwarded-Proto`, `X-Forwarded-For`, `CF-Visitor`, `X-ARR-SSL` and friends
+are headers, so any client can send them. They are believed only when `REMOTE_ADDR` matches an
+entry in `conscribe.trusted_proxies` (IPs or CIDR blocks, IPv4 and IPv6); the default is an empty
+list, so a site that is not behind a proxy trusts only what the web server itself reports:
+
+```php
+'conscribe' => [
+    'trusted_proxies' => ['10.0.0.0/8', '2400:cb00::/32'],
+],
 ```
 
 **JSON bodies** with `Content-Type: application/json` are decoded and merged into the body params automatically; malformed JSON is flagged via `hasInvalidJson()` rather than silently dropped. `multipart/form-data` skips the raw-body read entirely, since `php://input` is always empty there.
@@ -623,12 +634,21 @@ Render the hidden field:
 </form>
 ```
 
-Validate in the action:
+**Every POST route is verified by the router**, before the action runs — a missing or wrong token
+returns 419 through the normal error page. There is nothing to call. An endpoint that authenticates
+some other way opts out explicitly, per route or per group:
 
 ```php
-public function send(Request $request): Response
+$router->post('api/webhook', [ApiController::class, 'webhook'], ['csrf' => false]);
+```
+
+On a route that opted out you can still check by hand; `check_csrf()` throws a `CsrfException`,
+which the router turns into the same 419 page:
+
+```php
+public function webhook(Request $request): Response
 {
-    check_csrf($request);   // sends 403 and exits if invalid
+    check_csrf($request);   // throws CsrfException if invalid
     // …
 }
 ```
@@ -706,8 +726,14 @@ $repo->insert(['title' => 'Nadpis', 'slug' => 'nadpis']);
 $repo->update(12, ['title' => 'Jiný nadpis']);
 $repo->delete(12);
 
-$repo->beginTransaction(); $repo->commit(); $repo->rollBack();
+$repo->transaction(fn (ArticleRepository $repo) => $repo->insert([...]));
+Connection::transaction(fn () => /* several repositories, one unit of work */);
 ```
+
+`transaction()` commits on return and rolls back on any throw, rethrowing the exception either way.
+Nested calls become savepoints, so two repositories sharing the connection compose instead of
+colliding. The bare `beginTransaction()` / `commit()` / `rollBack()` passthroughs are deprecated —
+they cannot nest.
 
 Values are always bound as parameters. Identifiers (table, columns, order-by) cannot be bound by PDO, so they are validated against `^[A-Za-z_][A-Za-z0-9_]*$` and backtick-quoted — a bad identifier throws instead of reaching SQL. `null` conditions become `IS NULL`, and order directions collapse to `ASC`/`DESC`.
 
@@ -827,7 +853,7 @@ The `modules` key in the config acts as a whitelist; remove the key to enable ev
 `MenuRepository` builds the navigation shown in the layout, with nested items and automatic active-state detection:
 
 ```php
-$menu = new MenuRepository();
+$menu = new MenuRepository($request);   // the request decides which item is active
 $menu->add('Domů', '/');
 $menu->add('Služby', '/sluzby');
 $menu->addSubmenu('Služby', 'Konzultace', '/sluzby/konzultace');
@@ -871,12 +897,14 @@ The front end also ships **Cookie Consent v3** (`public/js/cookieconsent.umd.js`
 | Threat | Mitigation |
 | --- | --- |
 | XSS | `esc()` with `ENT_QUOTES \| ENT_SUBSTITUTE`; SVG sanitization strips scripts, `foreignObject`, `on*` handlers and `javascript:`/`data:` URIs |
-| CSRF | Random 32-byte token, `hash_equals()` comparison, POST field or `X-CSRF-TOKEN` header, `check_csrf()` aborts with 403 |
+| CSRF | Random 32-byte token, `hash_equals()` comparison, POST field or `X-CSRF-TOKEN` header; **verified by the router on every POST** unless the route sets `['csrf' => false]`, 419 otherwise |
 | Session fixation | `use_strict_mode`, interval-based ID rotation, manual `regenerate()` |
 | Session hijacking | `HttpOnly`, `SameSite`, `Secure` (auto-detected), cookies-only IDs, non-default cookie name |
 | SQL injection | Prepared statements throughout, identifier whitelisting, emulated prepares disabled |
 | Open redirect | `sanitizeRedirectUrl()` — same-host absolute URLs only, protocol-relative and `/\` forms rejected |
 | HTTP response splitting | CR/LF/NUL stripped from every header name and value |
+| Header spoofing | `X-Forwarded-*`, `CF-Visitor` and `X-ARR-SSL` honoured only from `conscribe.trusted_proxies` (empty by default) |
+| Script injection | Optional CSP with a per-request nonce (`security.csp`, report-only until you flip `csp_report_only`), stamped into inline scripts by `csp_nonce_attr()` |
 | Path traversal | View path whitelist, `..` rejection in `component()`, `svg()`, `image()`, and `realpath()` containment in `ImageCache` |
 | Clickjacking / MIME sniffing | `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff` |
 | Protocol downgrade | `Strict-Transport-Security` sent on HTTPS requests (proxy-aware detection) |

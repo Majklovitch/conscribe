@@ -131,7 +131,34 @@ abstract class Repository {
 
     protected function run(string $sql, array $bindings = []): PDOStatement {
         $statement = $this->db()->prepare($sql);
-        $statement->execute($bindings);
+
+        // Named placeholders (':id' => ...) are handed to execute() unchanged -
+        // they cannot be bound by position, and a subclass writing its own SQL
+        // is free to use them.
+        if ($bindings !== [] && !array_is_list($bindings)) {
+            $statement->execute($bindings);
+
+            return $statement;
+        }
+
+        // Positional bindings are bound one by one rather than through
+        // execute($bindings), because execute() sends every value as a string -
+        // and MySQL rejects a string in LIMIT/OFFSET once emulated prepares are
+        // off, which they are.
+        foreach ($bindings as $index => $value) {
+            $statement->bindValue(
+                $index + 1,
+                $value,
+                match (true) {
+                    is_int($value)  => PDO::PARAM_INT,
+                    is_bool($value) => PDO::PARAM_BOOL,
+                    $value === null => PDO::PARAM_NULL,
+                    default         => PDO::PARAM_STR,
+                }
+            );
+        }
+
+        $statement->execute();
 
         return $statement;
     }
@@ -170,8 +197,13 @@ abstract class Repository {
 
         $sql = 'SELECT * FROM ' . $this->table() . $whereSql . $this->buildOrderBy($order);
 
+        // Bound like any other value. The two are int-typed and would be safe
+        // interpolated, but this is the only layer that touches SQL and it is
+        // easier to keep the rule absolute than to remember the exception.
         if ($limit !== null) {
-            $sql .= ' LIMIT ' . max(0, $limit) . ' OFFSET ' . max(0, $offset);
+            $sql .= ' LIMIT ? OFFSET ?';
+            $bindings[] = max(0, $limit);
+            $bindings[] = max(0, $offset);
         }
 
         return $this->hydrateAll($this->run($sql, $bindings)->fetchAll());
@@ -255,14 +287,31 @@ abstract class Repository {
         return $this->run($sql, [$id])->rowCount();
     }
 
+    /**
+     * Runs the callback inside a transaction, committing on return and rolling
+     * back on any throw. Nesting is handled with savepoints, so two
+     * repositories sharing the connection cannot deadlock each other the way
+     * two bare beginTransaction() calls would.
+     *
+     * @template T
+     * @param callable(static): T $callback
+     * @return T
+     */
+    public function transaction(callable $callback): mixed {
+        return Connection::transaction(fn (): mixed => $callback($this), $this->db());
+    }
+
+    /** @deprecated Use transaction(); a bare begin cannot nest. */
     public function beginTransaction(): bool {
         return $this->db()->beginTransaction();
     }
 
+    /** @deprecated Use transaction(). */
     public function commit(): bool {
         return $this->db()->commit();
     }
 
+    /** @deprecated Use transaction(). */
     public function rollBack(): bool {
         return $this->db()->rollBack();
     }

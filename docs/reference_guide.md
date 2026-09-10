@@ -77,7 +77,7 @@ The [Router](file:///home/mbrotys/Web/projects/03_osobní/mvc_zaklad/app/Core/Ro
   * Maps requests containing `/admin` as the first segment to [App\Controllers\AdminController](file:///home/mbrotys/Web/projects/03_osobní/mvc_zaklad/app/Controllers/AdminController.php).
   * Maps all other requests to [App\Controllers\WebController](file:///home/mbrotys/Web/projects/03_osobní/mvc_zaklad/app/Controllers/WebController.php).
   * Executes the controller method matching the page name, passing remaining URL segments as parameters.
-  * Defines the global constant `CURRENT_PAGE` to keep track of the current route.
+  * The current route is read from the `Request` (`getPath()`, `getFirstSegment()`); the old global `CURRENT_PAGE` constant no longer exists.
 * **[Router::error()](file:///home/mbrotys/Web/projects/03_osobní/mvc_zaklad/app/Core/Router.php#L51) : void**
   * Sets the HTTP response code.
   * Instantiates the 404 View with dynamic error variables and stops execution.
