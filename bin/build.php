@@ -29,7 +29,7 @@ $env        = $options['env'] ?? ($bootstrap->isDevelopment() ? 'development' : 
 $production = $env === 'production';
 $watching   = array_key_exists('watch', $options);
 
-$build = static function () use ($production, $watching): bool {
+$build = static function () use ($production): bool {
     $started = microtime(true);
 
     try {
@@ -59,7 +59,10 @@ $last = null;
 
 echo "watching assets/ (Ctrl+C to stop)\n";
 
-while (true) {
+// for(;;) rather than while(true): the watcher is meant to run until it is
+// interrupted, and a literal always-true condition is indistinguishable from
+// a loop whose exit test was lost in an edit.
+for (;;) {
     $signature = AssetBuilder::sourceSignature();
 
     if ($signature !== $last) {

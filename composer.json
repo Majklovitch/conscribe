@@ -44,12 +44,20 @@
         "build:dev": "php bin/build.php --env=development",
         "build:watch": "php bin/build.php --env=development --watch",
         "lint": "php bin/lint.php",
-        "test": "phpunit"
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=512M",
+        "check": [
+            "@lint",
+            "@analyse",
+            "@test"
+        ]
     },
     "scripts-descriptions": {
         "build": "Compile SCSS and minify JS into public/ (production output).",
         "build:dev": "Compile assets with expanded CSS and a source map.",
-        "build:watch": "Rebuild assets whenever a file under assets/ changes."
+        "build:watch": "Rebuild assets whenever a file under assets/ changes.",
+        "analyse": "Static analysis (PHPStan level 5). The memory limit is a flag because .neon cannot set it.",
+        "check": "Everything CI would run, if there were CI: lint, analyse, test."
     },
     "require-dev": {
         "phpstan/phpstan": "*",

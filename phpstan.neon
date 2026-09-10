@@ -1,0 +1,21 @@
+parameters:
+    level: 5
+
+    paths:
+        - app
+        - bin
+        - tests
+
+    excludePaths:
+        analyse:
+            # Templates, not classes: they run inside View::capture() with an
+            # extracted $data array, so every variable in them is undefined as
+            # far as static analysis is concerned.
+            - app/Views
+
+    # A PHPDoc type is documentation, not a runtime guarantee. Where the core
+    # accepts a callable from the application - ErrorPage's $viewData, the
+    # sitemap providers - the declared return type is a promise the caller can
+    # break, and the defensive is_array() checks guarding those spots are real.
+    # Without this, PHPStan reads the docblock as fact and calls them redundant.
+    treatPhpDocTypesAsCertain: false
