@@ -12,8 +12,7 @@ use App\Core\Config;
  * never touches the session therefore gets no cookie, and their page stays
  * cacheable on proxies and CDNs.
  */
-class Session
-{
+class Session {
     /** Keys owned by Session itself; they never show up in all(). */
     private const RESERVED_KEYS = ['_flash', '_old_input', '_session_born', 'csrf_token'];
 
@@ -43,8 +42,7 @@ class Session
     /**
      * @param array<string, mixed> $config Overrides on top of DEFAULTS.
      */
-    public function __construct(array $config = [])
-    {
+    public function __construct(array $config = []) {
         $this->config = array_merge(self::DEFAULTS, $config);
     }
 
@@ -52,8 +50,7 @@ class Session
      * Shared instance for the global template helpers, which have no object
      * in reach - the same principle as Config or Connection::get().
      */
-    public static function instance(): self
-    {
+    public static function instance(): self {
         if (self::$instance === null) {
             $config = Config::get('session', []);
             self::$instance = new self(is_array($config) ? $config : []);
@@ -66,8 +63,7 @@ class Session
      * Sets (or clears) the shared instance. Meant for tests,
      * the counterpart of Config::set().
      */
-    public static function setInstance(?self $session): void
-    {
+    public static function setInstance(?self $session): void {
         self::$instance = $session;
     }
 
@@ -76,8 +72,7 @@ class Session
      * is impossible - after headers are sent, or in CLI. The caller then simply
      * learns nothing instead of crashing mid-render.
      */
-    public function start(): bool
-    {
+    public function start(): bool {
         if (session_status() === PHP_SESSION_ACTIVE) {
             $this->afterStart();
 
@@ -111,13 +106,11 @@ class Session
         return true;
     }
 
-    public function isStarted(): bool
-    {
+    public function isStarted(): bool {
         return session_status() === PHP_SESSION_ACTIVE;
     }
 
-    public function id(): ?string
-    {
+    public function id(): ?string {
         if (!$this->start()) {
             return null;
         }
@@ -131,8 +124,7 @@ class Session
      * Swaps the session ID while keeping the data - defence against session
      * fixation. Worth calling manually after a login.
      */
-    public function regenerate(bool $deleteOld = true): bool
-    {
+    public function regenerate(bool $deleteOld = true): bool {
         if (!$this->start() || headers_sent()) {
             return false;
         }
@@ -146,8 +138,7 @@ class Session
         return true;
     }
 
-    public function destroy(): void
-    {
+    public function destroy(): void {
         if (!$this->isStarted() && !$this->start()) {
             return;
         }
@@ -168,8 +159,7 @@ class Session
 
     // --- Data ---------------------------------------------------------------
 
-    public function get(string $key, mixed $default = null): mixed
-    {
+    public function get(string $key, mixed $default = null): mixed {
         if (!$this->start()) {
             return $default;
         }
@@ -177,8 +167,7 @@ class Session
         return $_SESSION[$key] ?? $default;
     }
 
-    public function set(string $key, mixed $value): self
-    {
+    public function set(string $key, mixed $value): self {
         if ($this->start()) {
             $_SESSION[$key] = $value;
         }
@@ -186,13 +175,11 @@ class Session
         return $this;
     }
 
-    public function has(string $key): bool
-    {
+    public function has(string $key): bool {
         return $this->start() && isset($_SESSION[$key]);
     }
 
-    public function remove(string $key): self
-    {
+    public function remove(string $key): self {
         if ($this->start()) {
             unset($_SESSION[$key]);
         }
@@ -203,8 +190,7 @@ class Session
     /**
      * Reads a value and removes it from the session in one go.
      */
-    public function pull(string $key, mixed $default = null): mixed
-    {
+    public function pull(string $key, mixed $default = null): mixed {
         $value = $this->get($key, $default);
         $this->remove($key);
 
@@ -216,8 +202,7 @@ class Session
      *
      * @return array<string, mixed>
      */
-    public function all(): array
-    {
+    public function all(): array {
         if (!$this->start()) {
             return [];
         }
@@ -228,8 +213,7 @@ class Session
     /**
      * Drops the application data, keeping the internal keys (flash, CSRF token).
      */
-    public function clear(): self
-    {
+    public function clear(): self {
         if (!$this->start()) {
             return $this;
         }
@@ -246,8 +230,7 @@ class Session
     /**
      * Stores a value for the next request only.
      */
-    public function flash(string $key, mixed $value): self
-    {
+    public function flash(string $key, mixed $value): self {
         if ($this->start()) {
             $_SESSION[self::FLASH_KEY]['new'][$key] = $value;
         }
@@ -259,8 +242,7 @@ class Session
      * Reads from both 'old' (written by the previous request) and 'new', so that
      * flashing and reading within a single request works too.
      */
-    public function getFlash(string $key, mixed $default = null): mixed
-    {
+    public function getFlash(string $key, mixed $default = null): mixed {
         if (!$this->start()) {
             return $default;
         }
@@ -270,8 +252,7 @@ class Session
             ?? $default;
     }
 
-    public function hasFlash(string $key): bool
-    {
+    public function hasFlash(string $key): bool {
         if (!$this->start()) {
             return false;
         }
@@ -283,8 +264,7 @@ class Session
     /**
      * @return array<string, mixed>
      */
-    public function allFlash(): array
-    {
+    public function allFlash(): array {
         if (!$this->start()) {
             return [];
         }
@@ -303,8 +283,7 @@ class Session
      *
      * @param string[]|null $keys null = all of them
      */
-    public function keepFlash(?array $keys = null): self
-    {
+    public function keepFlash(?array $keys = null): self {
         if (!$this->start()) {
             return $this;
         }
@@ -330,16 +309,14 @@ class Session
      *
      * @param array<string, mixed> $input
      */
-    public function flashInput(array $input): self
-    {
+    public function flashInput(array $input): self {
         // The CSRF token does not belong in a re-fill, it is always generated anew.
         unset($input[self::TOKEN_KEY]);
 
         return $this->flash(self::OLD_INPUT_KEY, $input);
     }
 
-    public function old(string $key, mixed $default = ''): mixed
-    {
+    public function old(string $key, mixed $default = ''): mixed {
         $input = $this->getFlash(self::OLD_INPUT_KEY, []);
 
         return is_array($input) ? ($input[$key] ?? $default) : $default;
@@ -350,8 +327,7 @@ class Session
     /**
      * Token for the current session, generated on the first call.
      */
-    public function token(): string
-    {
+    public function token(): string {
         if (!$this->start()) {
             return '';
         }
@@ -363,8 +339,7 @@ class Session
         return (string) $_SESSION[self::TOKEN_KEY];
     }
 
-    public function validateToken(?string $token): bool
-    {
+    public function validateToken(?string $token): bool {
         if (!$this->isStarted() && !$this->start()) {
             return false;
         }
@@ -381,8 +356,7 @@ class Session
     /**
      * Drops the current token; the next token() generates a new one.
      */
-    public function rotateToken(): self
-    {
+    public function rotateToken(): self {
         if ($this->start()) {
             unset($_SESSION[self::TOKEN_KEY]);
         }
@@ -410,8 +384,7 @@ class Session
     /**
      * Ages the flash queues and rotates the ID if due. Runs once per request.
      */
-    private function afterStart(): void
-    {
+    private function afterStart(): void {
         if ($this->flashAged) {
             return;
         }
@@ -442,8 +415,7 @@ class Session
      *
      * @return array<string, mixed>
      */
-    private function cookieParams(): array
-    {
+    private function cookieParams(): array {
         return [
             'lifetime' => (int) $this->config['lifetime'],
             'path'     => (string) $this->config['path'],

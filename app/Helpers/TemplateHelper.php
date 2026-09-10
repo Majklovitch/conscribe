@@ -20,11 +20,15 @@ function esc(mixed $value): string {
  * @throws DateMalformedStringException
  */
 function dateFormat(?string $date, string $format = 'd. m. Y'): string {
-    if (!$date) return '';
+    if (!$date) {
+        return '';
+    }
     return (new DateTime($date))->format($format);
 }
 function truncate(string $text, int $length = 100, string $append = '...'): string {
-    if (mb_strlen($text) <= $length) return $text;
+    if (mb_strlen($text) <= $length) {
+        return $text;
+    }
     return mb_substr($text, 0, $length) . $append;
 }
 function component(string $name, array $data = []): void {
@@ -162,8 +166,12 @@ function svg(string $name, array $attrs = []): string {
         }
 
         foreach ($attrs as $k => $v) {
-            if ($v === null || $v === '') continue;
-            if (preg_match('/\b' . preg_quote($k, '/') . '\s*=\s*/i', $existing)) continue;
+            if ($v === null || $v === '') {
+                continue;
+            }
+            if (preg_match('/\b' . preg_quote($k, '/') . '\s*=\s*/i', $existing)) {
+                continue;
+            }
             $existing .= ' ' . $k . '="' . htmlspecialchars((string)$v, ENT_QUOTES) . '"';
         }
 
@@ -243,7 +251,7 @@ function renderTrackingCodes(): string {
         $html .= "    <script{$nonce} type=\"text/javascript\" src=\"https://c.seznam.cz/js/rc.js\"></script>\n";
         $html .= "    <script{$nonce} type=\"text/javascript\">\n";
         $html .= "        /* <![CDATA[ */\n";
-        $html .= "        var seznam_retargeting_id = " . $sklikId . ";\n";
+        $html .= '        var seznam_retargeting_id = ' . $sklikId . ";\n";
         $html .= "        if (window.rc && window.rc.retargeting) {\n";
         $html .= "            window.rc.retargeting(seznam_retargeting_id);\n";
         $html .= "        }\n";
@@ -268,7 +276,7 @@ function renderTrackingCodes(): string {
         $html .= "        fbq('track', 'PageView');\n";
         $html .= "    </script>\n";
         $html .= "    <noscript>\n";
-        $html .= "        <img height=\"1\" width=\"1\" style=\"display:none\" src=\"https://www.facebook.com/tr?id=" . esc($fbPixelId) . "&ev=PageView&noscript=1\"/>\n";
+        $html .= '        <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=' . esc($fbPixelId) . "&ev=PageView&noscript=1\"/>\n";
         $html .= "    </noscript>\n";
         $html .= "    <!-- End Facebook Pixel Code -->\n";
     }

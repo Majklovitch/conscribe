@@ -6,26 +6,22 @@ namespace App\Services\Media;
  * Fallback driver for hosts without Imagick. Covers jpeg/png/gif/webp,
  * the formats that actually show up on the web.
  */
-class GdProcessor implements ImageProcessor
-{
+class GdProcessor implements ImageProcessor {
     /** @var \GdImage|null */
     private $image = null;
 
     private int $width = 0;
     private int $height = 0;
 
-    public static function isAvailable(): bool
-    {
+    public static function isAvailable(): bool {
         return extension_loaded('gd') && function_exists('imagecreatetruecolor');
     }
 
-    public static function name(): string
-    {
+    public static function name(): string {
         return 'gd';
     }
 
-    public function open(string $sourcePath): array
-    {
+    public function open(string $sourcePath): array {
         $this->close();
 
         $info = @getimagesize($sourcePath);
@@ -58,8 +54,7 @@ class GdProcessor implements ImageProcessor
         return [$this->width, $this->height];
     }
 
-    public function resizeCover(int $width, int $height): void
-    {
+    public function resizeCover(int $width, int $height): void {
         if (!$this->image) {
             throw new \RuntimeException('GD: resizeCover() called before open().');
         }
@@ -86,10 +81,14 @@ class GdProcessor implements ImageProcessor
         imagecopyresampled(
             $canvas,
             $this->image,
-            0, 0,
-            $cropX, $cropY,
-            $width, $height,
-            $cropWidth, $cropHeight
+            0,
+            0,
+            $cropX,
+            $cropY,
+            $width,
+            $height,
+            $cropWidth,
+            $cropHeight,
         );
 
         // Since PHP 8.0 GdImage cleans up after itself, and imagedestroy() is
@@ -99,8 +98,7 @@ class GdProcessor implements ImageProcessor
         $this->height = $height;
     }
 
-    public function save(string $destinationPath, string $format, int $quality): bool
-    {
+    public function save(string $destinationPath, string $format, int $quality): bool {
         if (!$this->image) {
             return false;
         }
@@ -119,8 +117,7 @@ class GdProcessor implements ImageProcessor
         };
     }
 
-    public function close(): void
-    {
+    public function close(): void {
         $this->image = null;
         $this->width = 0;
         $this->height = 0;
@@ -131,8 +128,7 @@ class GdProcessor implements ImageProcessor
      *
      * @return \GdImage
      */
-    private function flattenForJpeg()
-    {
+    private function flattenForJpeg() {
         $flat = imagecreatetruecolor($this->width, $this->height);
         $white = imagecolorallocate($flat, 255, 255, 255);
         imagefilledrectangle($flat, 0, 0, $this->width, $this->height, $white);
@@ -148,8 +144,7 @@ class GdProcessor implements ImageProcessor
      * @param \GdImage $image
      * @return \GdImage
      */
-    private function applyExifOrientation($image, string $sourcePath)
-    {
+    private function applyExifOrientation($image, string $sourcePath) {
         $exif = @exif_read_data($sourcePath);
         $orientation = isset($exif['Orientation']) ? (int) $exif['Orientation'] : 1;
 

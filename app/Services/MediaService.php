@@ -14,8 +14,7 @@ use App\Services\Media\ProcessorFactory;
  * All the logic lives in App\Services\Media\ImageCache; once a container is
  * added, register ImageCache and drop this class.
  */
-final class MediaService
-{
+final class MediaService {
     /** Defaults, so the service works even without a 'media' key in the configuration. */
     private const DEFAULTS = [
         'driver'        => 'auto',
@@ -35,8 +34,7 @@ final class MediaService
      * caller then degrades to the original image instead of a fatal error
      * during rendering.
      */
-    public static function cache(): ?ImageCache
-    {
+    public static function cache(): ?ImageCache {
         if (self::$resolved) {
             return self::$cache;
         }
@@ -60,7 +58,7 @@ final class MediaService
             ProcessorFactory::make((string) $config['driver']),
             (int) $config['quality'],
             (string) $config['format'],
-            (int) $config['max_dimension']
+            (int) $config['max_dimension'],
         );
 
         return self::$cache;
@@ -71,8 +69,7 @@ final class MediaService
      *
      * @param array{format?: string} $options
      */
-    public static function url(string $path, int $width, int $height, array $options = []): ?string
-    {
+    public static function url(string $path, int $width, int $height, array $options = []): ?string {
         return self::cache()?->get($path, $width, $height, $options);
     }
 
@@ -81,8 +78,7 @@ final class MediaService
      *
      * @return array{0:int,1:int}|null
      */
-    public static function preset(string $name): ?array
-    {
+    public static function preset(string $name): ?array {
         $presets = self::config()['presets'];
 
         if (!is_array($presets) || !isset($presets[$name]) || !is_array($presets[$name])) {
@@ -101,8 +97,7 @@ final class MediaService
      * Drops the statically held instance. Meant for tests, and for the case
      * where the configuration is overwritten at runtime via Config::set().
      */
-    public static function reset(): void
-    {
+    public static function reset(): void {
         self::$cache = null;
         self::$resolved = false;
     }
@@ -110,15 +105,13 @@ final class MediaService
     /**
      * @return array<string, mixed>
      */
-    private static function config(): array
-    {
+    private static function config(): array {
         $media = Config::get('media', []);
 
         return array_merge(self::DEFAULTS, is_array($media) ? $media : []);
     }
 
-    private static function publicRoot(): string
-    {
+    private static function publicRoot(): string {
         return dirname(__DIR__, 2) . '/public';
     }
 }

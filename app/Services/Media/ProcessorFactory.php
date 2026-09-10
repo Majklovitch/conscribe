@@ -5,8 +5,7 @@ namespace App\Services\Media;
 /**
  * Picks an available graphics driver. Imagick takes precedence, GD is the fallback.
  */
-class ProcessorFactory
-{
+class ProcessorFactory {
     /** @var array<string, class-string<ImageProcessor>> */
     private const DRIVERS = [
         'imagick' => ImagickProcessor::class,
@@ -17,13 +16,12 @@ class ProcessorFactory
      * @param string $prefer 'auto' | 'imagick' | 'gd'
      * @throws \RuntimeException when no driver is available
      */
-    public static function make(string $prefer = 'auto'): ImageProcessor
-    {
+    public static function make(string $prefer = 'auto'): ImageProcessor {
         $class = self::resolve($prefer);
 
         if ($class === null) {
             throw new \RuntimeException(
-                'No image driver available. Install ext-imagick (preferred) or ext-gd.'
+                'No image driver available. Install ext-imagick (preferred) or ext-gd.',
             );
         }
 
@@ -34,16 +32,14 @@ class ProcessorFactory
      * Is at least one driver available? Lets the caller degrade gracefully
      * without catching an exception.
      */
-    public static function hasDriver(string $prefer = 'auto'): bool
-    {
+    public static function hasDriver(string $prefer = 'auto'): bool {
         return self::resolve($prefer) !== null;
     }
 
     /**
      * @return class-string<ImageProcessor>|null
      */
-    private static function resolve(string $prefer): ?string
-    {
+    private static function resolve(string $prefer): ?string {
         $prefer = strtolower(trim($prefer));
 
         // An explicitly requested driver is never substituted - otherwise the

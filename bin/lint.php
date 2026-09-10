@@ -24,7 +24,7 @@ foreach ($scan as $dir) {
     }
 
     $files = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)
+        new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
     );
 
     foreach ($files as $file) {

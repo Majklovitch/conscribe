@@ -117,7 +117,7 @@ class Debug {
      * $_SERVER - that is what the built-in Tracy panels already show.
      */
     private static function requestPanel(): IBarPanel {
-        return new class() implements IBarPanel {
+        return new class () implements IBarPanel {
             private ?Request $request = null;
 
             public function getTab(): string {

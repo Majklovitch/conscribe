@@ -9,8 +9,7 @@ namespace App\Services\Media;
  * open() -> resizeCover() -> save() -> close(), and close() must be called
  * even on failure (typically in a finally block).
  */
-interface ImageProcessor
-{
+interface ImageProcessor {
     /**
      * Is the library this implementation uses available on this server?
      */

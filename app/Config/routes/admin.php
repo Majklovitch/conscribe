@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Pages that must not be indexed - the administration, internal tools, form
  * targets, anything behind a login.

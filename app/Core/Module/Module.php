@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Module;
 
 use App\Core\Http\Request;

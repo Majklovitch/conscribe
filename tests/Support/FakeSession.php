@@ -14,12 +14,10 @@ use App\Core\Http\Session;
  * token look invalid and the accepting half of the CSRF tests untestable.
  * Overriding the one method keeps the rest of Session real.
  */
-final class FakeSession extends Session
-{
+final class FakeSession extends Session {
     public const VALID_TOKEN = 'valid-test-token';
 
-    public function validateToken(?string $token): bool
-    {
+    public function validateToken(?string $token): bool {
         return $token === self::VALID_TOKEN;
     }
 }

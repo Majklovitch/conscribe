@@ -21,8 +21,8 @@ class MenuRepository {
         $this->request = $request;
 
         $this->add('Home', '/');
-        $this->add("Test", '/test');
-        $this->add("KKt", "https://example.org/");
+        $this->add('Test', '/test');
+        $this->add('KKt', 'https://example.org/');
     }
 
     /**
@@ -143,4 +143,3 @@ class MenuRepository {
         return trim($linkUri, '/') === $currentPage;
     }
 }
-

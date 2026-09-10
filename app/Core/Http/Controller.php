@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Http;
 
 use App\Core\Template\View;
@@ -8,13 +9,11 @@ abstract class Controller {
     protected ?Request $request = null;
     protected ?Session $session = null;
 
-    public function setRequest(Request $request): void
-    {
+    public function setRequest(Request $request): void {
         $this->request = $request;
     }
 
-    protected function request(): Request
-    {
+    protected function request(): Request {
         if ($this->request === null) {
             throw new RuntimeException(static::class . ' has no Request; was it created outside the Router?');
         }
@@ -22,13 +21,11 @@ abstract class Controller {
         return $this->request;
     }
 
-    public function setSession(Session $session): void
-    {
+    public function setSession(Session $session): void {
         $this->session = $session;
     }
 
-    protected function session(): Session
-    {
+    protected function session(): Session {
         if ($this->session === null) {
             throw new RuntimeException(static::class . ' has no Session; was it created outside the Router?');
         }
@@ -39,16 +36,14 @@ abstract class Controller {
     /**
      * @throws \Throwable
      */
-    protected function render(string $view, array $params = [], string $layout = 'main', int $status = 200): Response
-    {
+    protected function render(string $view, array $params = [], string $layout = 'main', int $status = 200): Response {
         return Response::html(View::render($view, $params, $layout), $status);
     }
 
     /**
      * @throws \JsonException
      */
-    protected function json(mixed $data, int $statusCode = 200, array $headers = []): Response
-    {
+    protected function json(mixed $data, int $statusCode = 200, array $headers = []): Response {
         return Response::json($data, $statusCode, $headers);
     }
 

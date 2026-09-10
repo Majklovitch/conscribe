@@ -18,5 +18,6 @@ final readonly class SitemapUrl {
         public ?string $lastmod = null,
         public ?string $changefreq = null,
         public ?float $priority = null,
-    ) {}
+    ) {
+    }
 }

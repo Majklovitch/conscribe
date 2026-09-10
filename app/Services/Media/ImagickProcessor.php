@@ -6,22 +6,18 @@ namespace App\Services\Media;
  * The preferred driver. Imagick handles more formats than GD and deals better
  * with colour profiles and EXIF orientation.
  */
-class ImagickProcessor implements ImageProcessor
-{
+class ImagickProcessor implements ImageProcessor {
     private ?\Imagick $image = null;
 
-    public static function isAvailable(): bool
-    {
+    public static function isAvailable(): bool {
         return extension_loaded('imagick') && class_exists('Imagick');
     }
 
-    public static function name(): string
-    {
+    public static function name(): string {
         return 'imagick';
     }
 
-    public function open(string $sourcePath): array
-    {
+    public function open(string $sourcePath): array {
         $this->close();
 
         $image = new \Imagick();
@@ -42,8 +38,7 @@ class ImagickProcessor implements ImageProcessor
         return [$image->getImageWidth(), $image->getImageHeight()];
     }
 
-    public function resizeCover(int $width, int $height): void
-    {
+    public function resizeCover(int $width, int $height): void {
         if (!$this->image instanceof \Imagick) {
             throw new \RuntimeException('Imagick: resizeCover() called before open().');
         }
@@ -54,8 +49,7 @@ class ImagickProcessor implements ImageProcessor
         $this->image->setImagePage(0, 0, 0, 0);
     }
 
-    public function save(string $destinationPath, string $format, int $quality): bool
-    {
+    public function save(string $destinationPath, string $format, int $quality): bool {
         if (!$this->image instanceof \Imagick) {
             return false;
         }
@@ -69,8 +63,7 @@ class ImagickProcessor implements ImageProcessor
         return (bool) $this->image->writeImage($destinationPath);
     }
 
-    public function close(): void
-    {
+    public function close(): void {
         if ($this->image instanceof \Imagick) {
             $this->image->clear();
             $this->image->destroy();

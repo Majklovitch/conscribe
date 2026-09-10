@@ -44,7 +44,7 @@ $build = static function () use ($production): bool {
         "[%s] built %s in %d ms\n",
         date('H:i:s'),
         $production ? 'production' : 'development',
-        (int) ((microtime(true) - $started) * 1000)
+        (int) ((microtime(true) - $started) * 1000),
     );
 
     return true;

@@ -195,7 +195,7 @@ final class AssetBuilder {
             throw new \RuntimeException(sprintf(
                 'JS minification produced implausible output (%d bytes from %d). Set assets.js.minify to false to ship concatenated sources.',
                 strlen($minified),
-                strlen($concatenated)
+                strlen($concatenated),
             ));
         }
 
@@ -222,7 +222,7 @@ final class AssetBuilder {
 
         return max(
             $builder->newestSource($builder->config['scss']['watch'], 'scss'),
-            $builder->newestSource($builder->config['js']['watch'], 'js')
+            $builder->newestSource($builder->config['js']['watch'], 'js'),
         );
     }
 
@@ -263,7 +263,7 @@ final class AssetBuilder {
 
         $newest = 0;
         $files = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
         );
 
         foreach ($files as $file) {

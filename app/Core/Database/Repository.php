@@ -70,7 +70,7 @@ abstract class Repository {
         }
 
         if (!is_subclass_of($this->model, Model::class)) {
-            throw new RuntimeException(static::class . "::\$model must be a subclass of " . Model::class . '.');
+            throw new RuntimeException(static::class . '::$model must be a subclass of ' . Model::class . '.');
         }
 
         /** @var Model $model */
@@ -154,7 +154,7 @@ abstract class Repository {
                     is_bool($value) => PDO::PARAM_BOOL,
                     $value === null => PDO::PARAM_NULL,
                     default         => PDO::PARAM_STR,
-                }
+                },
             );
         }
 

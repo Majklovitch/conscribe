@@ -56,7 +56,7 @@ class ErrorHandler {
     public static function register(
         bool $isDevelopment = false,
         ?callable $renderer = null,
-        ?LoggerInterface $logger = null
+        ?LoggerInterface $logger = null,
     ): void {
         self::$logger = $logger;
 
@@ -165,7 +165,11 @@ class ErrorHandler {
         ];
 
         $fatal = new ErrorException(
-            $error['message'], 0, $error['type'], $error['file'], $error['line']
+            $error['message'],
+            0,
+            $error['type'],
+            $error['file'],
+            $error['line'],
         );
 
         if (($dump = Dump::write($fatal)) !== null) {

@@ -17,8 +17,7 @@ namespace App\Services\Media;
  * The paths are readable, and deleting a single directory throws away one whole
  * size when the layout changes.
  */
-class ImageCache
-{
+class ImageCache {
     /** Formats we are able to save into. */
     private const ALLOWED_FORMATS = ['webp', 'jpg', 'jpeg', 'png', 'gif'];
 
@@ -37,7 +36,7 @@ class ImageCache
         ImageProcessor $processor,
         int $quality = 82,
         string $format = 'webp',
-        int $maxDimension = 4000
+        int $maxDimension = 4000,
     ) {
         $this->sourceRoot = rtrim(str_replace('\\', '/', $sourceRoot), '/');
         $this->cacheRoot = rtrim(str_replace('\\', '/', $cacheRoot), '/');
@@ -55,8 +54,7 @@ class ImageCache
      *
      * @param array{format?: string} $options
      */
-    public function get(string $relativePath, int $width, int $height, array $options = []): ?string
-    {
+    public function get(string $relativePath, int $width, int $height, array $options = []): ?string {
         $relative = $this->normalizeRelativePath($relativePath);
         if ($relative === null) {
             return null;
@@ -91,8 +89,7 @@ class ImageCache
      *
      * @param int[] $widths
      */
-    public function srcset(string $relativePath, array $widths, float $ratio): string
-    {
+    public function srcset(string $relativePath, array $widths, float $ratio): string {
         $entries = [];
 
         foreach ($widths as $width) {
@@ -115,8 +112,7 @@ class ImageCache
      * Useful after changing format or quality in the configuration - neither is
      * reflected in the directory name, so old files never invalidate themselves.
      */
-    public function purge(?int $width = null, ?int $height = null): void
-    {
+    public function purge(?int $width = null, ?int $height = null): void {
         $target = $this->cacheRoot;
 
         if ($width !== null && $height !== null) {
@@ -126,13 +122,11 @@ class ImageCache
         $this->removeDirectory($target, $target === $this->cacheRoot);
     }
 
-    public function getCacheRoot(): string
-    {
+    public function getCacheRoot(): string {
         return $this->cacheRoot;
     }
 
-    public function getSourceRoot(): string
-    {
+    public function getSourceRoot(): string {
         return $this->sourceRoot;
     }
 
@@ -140,8 +134,7 @@ class ImageCache
      * Produces the variant through a temporary file and moves it into place
      * atomically, so two concurrent requests never serve a half-written file.
      */
-    private function generate(string $source, string $cachePath, int $width, int $height, string $format): bool
-    {
+    private function generate(string $source, string $cachePath, int $width, int $height, string $format): bool {
         $directory = dirname($cachePath);
         if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
             return false;
@@ -181,8 +174,7 @@ class ImageCache
         }
     }
 
-    private function isFresh(string $cachePath, int $sourceTime): bool
-    {
+    private function isFresh(string $cachePath, int $sourceTime): bool {
         if (!is_file($cachePath)) {
             return false;
         }
@@ -195,8 +187,7 @@ class ImageCache
     /**
      * Verifies the path stays inside sourceRoot and points at a readable image.
      */
-    private function resolveSource(string $relative): ?string
-    {
+    private function resolveSource(string $relative): ?string {
         $candidate = realpath($this->sourceRoot . '/' . $relative);
         if ($candidate === false) {
             return null;
@@ -218,8 +209,7 @@ class ImageCache
         return $candidate;
     }
 
-    private function normalizeRelativePath(string $path): ?string
-    {
+    private function normalizeRelativePath(string $path): ?string {
         $path = str_replace('\\', '/', trim($path));
 
         // A cache buster or query left over from asset() has no place in the path.
@@ -243,8 +233,7 @@ class ImageCache
      * The original extension stays in the name, otherwise photo.jpg and
      * photo.png would overwrite each other in the same directory.
      */
-    private function cacheRelativePath(string $relative, int $width, int $height, string $format): string
-    {
+    private function cacheRelativePath(string $relative, int $width, int $height, string $format): string {
         $segments = [];
         foreach (explode('/', $relative) as $segment) {
             $clean = preg_replace('/[^A-Za-z0-9._-]+/', '-', $segment);
@@ -269,20 +258,17 @@ class ImageCache
         return $width . 'x' . $height . '/' . $directory . $filename;
     }
 
-    private function normalizeFormat(string $format): string
-    {
+    private function normalizeFormat(string $format): string {
         $format = strtolower(ltrim(trim($format), '.'));
 
         return in_array($format, self::ALLOWED_FORMATS, true) ? $format : 'webp';
     }
 
-    private function clampDimension(int $value): int
-    {
+    private function clampDimension(int $value): int {
         return max(1, min($this->maxDimension, $value));
     }
 
-    private function removeDirectory(string $directory, bool $keepRoot): void
-    {
+    private function removeDirectory(string $directory, bool $keepRoot): void {
         if (!is_dir($directory)) {
             return;
         }

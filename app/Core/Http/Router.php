@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Http;
 
 use App\Core\Template\ViewNotFoundException;
@@ -9,7 +10,6 @@ use ReflectionMethod;
 use ReflectionNamedType;
 
 class Router {
-
     /**
      * Methods a route may be registered under.
      *
@@ -156,7 +156,7 @@ class Router {
         // only shows up as a 404 much later.
         if (!in_array($method, self::METHODS, true)) {
             throw new \InvalidArgumentException(
-                sprintf("Route '%s' uses unsupported method '%s'; expected one of %s.", $url, $method, implode(', ', self::METHODS))
+                sprintf("Route '%s' uses unsupported method '%s'; expected one of %s.", $url, $method, implode(', ', self::METHODS)),
             );
         }
 
@@ -416,7 +416,7 @@ class Router {
         return $this->error(
             500,
             sprintf('Action %s must return a Response or string, got %s.', $label, get_debug_type($result)),
-            $request
+            $request,
         );
     }
 

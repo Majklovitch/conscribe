@@ -159,7 +159,7 @@ class SitemapService {
 
                 return rawurlencode((string) $value);
             },
-            $template
+            $template,
         );
 
         return $missing ? null : $loc;

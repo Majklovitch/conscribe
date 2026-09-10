@@ -4,8 +4,7 @@ namespace App\Core\Http;
 
 use App\Core\Config;
 
-class Request
-{
+class Request {
     private string $path;
     private string $method;
     private array $queryParams;
@@ -24,7 +23,7 @@ class Request
         array $files = [],
         array $server = [],
         ?string $rawBody = null,
-        bool $hasInvalidJson = false
+        bool $hasInvalidJson = false,
     ) {
         $this->queryParams = $queryParams;
         $this->bodyParams = $bodyParams;
@@ -42,8 +41,7 @@ class Request
         $this->headers = $this->extractHeaders($server);
     }
 
-    public static function createFromGlobals(): self
-    {
+    public static function createFromGlobals(): self {
         $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '');
 
         // With multipart/form-data php://input is always empty, nothing to read.
@@ -66,13 +64,11 @@ class Request
         return new self($_GET, $bodyParams, $_COOKIE, $_FILES, $_SERVER, $rawBody, $hasInvalidJson);
     }
 
-    public function hasInvalidJson(): bool
-    {
+    public function hasInvalidJson(): bool {
         return $this->hasInvalidJson;
     }
 
-    private function extractHeaders(array $server): array
-    {
+    private function extractHeaders(array $server): array {
         $headers = [];
         foreach ($server as $key => $value) {
             // On a rewrite, Apache moves Authorization into REDIRECT_HTTP_AUTHORIZATION.
@@ -95,8 +91,7 @@ class Request
      * The path without leading or trailing slashes.
      * The site root is an empty string, not a slash.
      */
-    public function getPath(): string
-    {
+    public function getPath(): string {
         return $this->path;
     }
 
@@ -104,8 +99,7 @@ class Request
      * Returns a copy of the request with a different path.
      * Used by modules that strip their own prefix (a language, say) from it.
      */
-    public function withPath(string $path): self
-    {
+    public function withPath(string $path): self {
         $clone = clone $this;
         $clone->path = trim($path, '/');
 
@@ -115,35 +109,29 @@ class Request
     /**
      * The first path segment, or 'home' for the site root.
      */
-    public function getFirstSegment(string $default = 'home'): string
-    {
+    public function getFirstSegment(string $default = 'home'): string {
         $segment = explode('/', $this->path)[0];
 
         return $segment === '' ? $default : $segment;
     }
 
-    public function getMethod(): string
-    {
+    public function getMethod(): string {
         return $this->method;
     }
 
-    public function isGet(): bool
-    {
+    public function isGet(): bool {
         return $this->method === 'GET';
     }
 
-    public function isPost(): bool
-    {
+    public function isPost(): bool {
         return $this->method === 'POST';
     }
 
-    public function isHead(): bool
-    {
+    public function isHead(): bool {
         return $this->method === 'HEAD';
     }
 
-    public function isAjax(): bool
-    {
+    public function isAjax(): bool {
         return strtolower($this->getHeader('x-requested-with') ?? '') === 'xmlhttprequest';
     }
 
@@ -163,8 +151,7 @@ class Request
      *
      * @param array|null $server Defaults to $_SERVER, so it can be called statically before a request exists.
      */
-    public static function isSecure(?array $server = null): bool
-    {
+    public static function isSecure(?array $server = null): bool {
         $server ??= $_SERVER;
 
         // Set by the web server itself - not forgeable by the client.
@@ -204,8 +191,7 @@ class Request
      *
      * @param array<string, mixed> $server
      */
-    public static function isFromTrustedProxy(array $server): bool
-    {
+    public static function isFromTrustedProxy(array $server): bool {
         $proxies = Config::get('conscribe.trusted_proxies', []);
         if (!is_array($proxies) || $proxies === []) {
             return false;
@@ -228,8 +214,7 @@ class Request
     /**
      * Matches an address against a single IP or a CIDR block (IPv4 and IPv6).
      */
-    private static function ipMatches(string $ip, string $range): bool
-    {
+    private static function ipMatches(string $ip, string $range): bool {
         $range = trim($range);
         if ($range === '') {
             return false;
@@ -279,8 +264,7 @@ class Request
      * Client IP address. Proxy headers are trusted only when the proxy itself is,
      * so the default source is always REMOTE_ADDR.
      */
-    public function getClientIp(bool $trustProxy = false): ?string
-    {
+    public function getClientIp(bool $trustProxy = false): ?string {
         if ($trustProxy && self::isFromTrustedProxy($this->server)) {
             $forwarded = $this->getHeader('x-forwarded-for');
             if ($forwarded !== null && $forwarded !== '') {
@@ -294,59 +278,48 @@ class Request
     /**
      * A value from the query string, falling back to the request body.
      */
-    public function get(string $key, mixed $default = null): mixed
-    {
+    public function get(string $key, mixed $default = null): mixed {
         return $this->queryParams[$key] ?? $this->bodyParams[$key] ?? $default;
     }
 
-    public function query(string $key, mixed $default = null): mixed
-    {
+    public function query(string $key, mixed $default = null): mixed {
         return $this->queryParams[$key] ?? $default;
     }
 
-    public function post(string $key, mixed $default = null): mixed
-    {
+    public function post(string $key, mixed $default = null): mixed {
         return $this->bodyParams[$key] ?? $default;
     }
 
-    public function getQueryParams(): array
-    {
+    public function getQueryParams(): array {
         return $this->queryParams;
     }
 
-    public function getBodyParams(): array
-    {
+    public function getBodyParams(): array {
         return $this->bodyParams;
     }
 
-    public function cookie(string $key, mixed $default = null): mixed
-    {
+    public function cookie(string $key, mixed $default = null): mixed {
         return $this->cookies[$key] ?? $default;
     }
 
-    public function file(string $key): ?array
-    {
+    public function file(string $key): ?array {
         return $this->files[$key] ?? null;
     }
 
-    public function getHeaders(): array
-    {
+    public function getHeaders(): array {
         return $this->headers;
     }
 
-    public function getHeader(string $name, ?string $default = null): ?string
-    {
+    public function getHeader(string $name, ?string $default = null): ?string {
         $name = strtolower($name);
         return $this->headers[$name] ?? $default;
     }
 
-    public function getRawBody(): ?string
-    {
+    public function getRawBody(): ?string {
         return $this->rawBody;
     }
 
-    public function getServerParams(): array
-    {
+    public function getServerParams(): array {
         return $this->server;
     }
 }

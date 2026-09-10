@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Database;
 
 use App\Core\Config;
@@ -102,7 +103,7 @@ class Connection {
     private static function create(): PDO {
         if (!is_file(Config::path())) {
             throw new RuntimeException(
-                'Database configuration is missing: copy app/Config/main.example.php to app/Config/main.php.'
+                'Database configuration is missing: copy app/Config/main.example.php to app/Config/main.php.',
             );
         }
 
