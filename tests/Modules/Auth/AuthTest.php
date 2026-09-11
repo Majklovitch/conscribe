@@ -63,7 +63,7 @@ final class AuthTest extends TestCase {
         (new Migrator($this->db, $this->migrationsPath()))->migrate();
 
         $this->users = new UserRepository($this->db);
-        $this->tokens = new ApiTokens($this->db, $this->users);
+        $this->tokens = new ApiTokens($this->users, $this->db);
         $this->session = new ArraySession();
         $this->auth = $this->freshAuth();
 
@@ -117,8 +117,18 @@ final class AuthTest extends TestCase {
 
         $json = (string) json_encode($user);
 
-        self::assertStringNotContainsString('password', $json);
+        // The keys exactly. The leak this caught arrived as numeric duplicates
+        // of every column, which a check for the name 'password' alone missed.
+        self::assertSame(
+            ['id', 'email', 'name', 'created_at', 'updated_at'],
+            array_keys((array) json_decode($json, true)),
+        );
+
+        // Both forms: json_encode escapes '/' as '\/', so a bcrypt hash that
+        // happened to contain one did not appear literally - which is why this
+        // test only failed on about half the runs.
         self::assertStringNotContainsString($user->passwordHash(), $json);
+        self::assertStringNotContainsString(str_replace('/', '\\/', $user->passwordHash()), $json);
         self::assertArrayNotHasKey('password', $user->toArray());
         self::assertNull($user['password']);
         self::assertTrue(password_verify(self::PASSWORD, $user->passwordHash()));

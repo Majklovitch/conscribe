@@ -2,6 +2,7 @@
 
 namespace Modules\Auth;
 
+use App\Core\Database\Connection;
 use PDO;
 
 /**
@@ -19,10 +20,20 @@ final class LoginThrottle {
     public const TABLE = 'login_attempts';
 
     public function __construct(
-        private PDO $db,
+        private ?PDO $db = null,
         private int $maxAttempts = 5,
         private int $decaySeconds = 900,
     ) {
+    }
+
+    /**
+     * The connection, on first use.
+     *
+     * Lazily, so injecting this service opens nothing: a page that only asks
+     * whether anyone is signed in must not connect to the database at all.
+     */
+    private function db(): PDO {
+        return $this->db ??= Connection::get();
     }
 
     public static function keyFor(string $email, string $ip): string {
@@ -52,30 +63,30 @@ final class LoginThrottle {
         // spell differently. Two failures racing each other can at worst
         // count as one, which errs on the side of the person logging in.
         if ($row === null) {
-            $this->db->prepare(sprintf('INSERT INTO %s (throttle_key, attempts, expires_at) VALUES (?, 1, ?)', self::TABLE))
+            $this->db()->prepare(sprintf('INSERT INTO %s (throttle_key, attempts, expires_at) VALUES (?, 1, ?)', self::TABLE))
                 ->execute([$key, $now + $this->decaySeconds]);
 
             return;
         }
 
         if ((int) $row['expires_at'] <= $now) {
-            $this->db->prepare(sprintf('UPDATE %s SET attempts = 1, expires_at = ? WHERE throttle_key = ?', self::TABLE))
+            $this->db()->prepare(sprintf('UPDATE %s SET attempts = 1, expires_at = ? WHERE throttle_key = ?', self::TABLE))
                 ->execute([$now + $this->decaySeconds, $key]);
 
             return;
         }
 
-        $this->db->prepare(sprintf('UPDATE %s SET attempts = attempts + 1 WHERE throttle_key = ?', self::TABLE))
+        $this->db()->prepare(sprintf('UPDATE %s SET attempts = attempts + 1 WHERE throttle_key = ?', self::TABLE))
             ->execute([$key]);
     }
 
     public function clear(string $key): void {
-        $this->db->prepare(sprintf('DELETE FROM %s WHERE throttle_key = ?', self::TABLE))->execute([$key]);
+        $this->db()->prepare(sprintf('DELETE FROM %s WHERE throttle_key = ?', self::TABLE))->execute([$key]);
     }
 
     /** @return array{attempts: int|string, expires_at: int|string}|null */
     private function row(string $key): ?array {
-        $statement = $this->db->prepare(sprintf('SELECT attempts, expires_at FROM %s WHERE throttle_key = ?', self::TABLE));
+        $statement = $this->db()->prepare(sprintf('SELECT attempts, expires_at FROM %s WHERE throttle_key = ?', self::TABLE));
         $statement->execute([$key]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 

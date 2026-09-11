@@ -235,6 +235,22 @@ class Container implements ContainerInterface {
             $name = $type->getName();
 
             if ($this->has($name)) {
+                // An optional dependency is not worth *creating* a bound
+                // factory for. Repository's constructor says it plainly - the
+                // connection is only injected in tests, otherwise it is taken
+                // on the first query - and autowiring a registered PDO into it
+                // would open a connection on every page that builds a
+                // repository, whether or not anything asks it a question.
+                //
+                // An entry that already exists is still injected: this defers
+                // work, it does not refuse to share.
+                if ($parameter->isDefaultValueAvailable()
+                    && isset($this->bindings[$name])
+                    && !array_key_exists($name, $this->instances)
+                ) {
+                    return $parameter->getDefaultValue();
+                }
+
                 return $this->get($name);
             }
 

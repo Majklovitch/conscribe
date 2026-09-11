@@ -54,6 +54,12 @@ final class NullableUnknown {
     }
 }
 
+/** Its dependency is optional - it copes without one. */
+final class OptionalGreeter {
+    public function __construct(public ?Greeter $greeter = null) {
+    }
+}
+
 final class NeedsScalar {
     public function __construct(public string $dsn) {
     }
@@ -139,6 +145,46 @@ final class ContainerTest extends TestCase {
     #[TestDox('an unknown but nullable dependency becomes null')]
     public function testAnUnknownNullableDependencyBecomesNull(): void {
         self::assertNull($this->container->get(NullableUnknown::class)->greeter);
+    }
+
+    #[TestDox('an optional dependency does not run a factory that has not run yet')]
+    public function testOptionalParametersDoNotTriggerFactories(): void {
+        // Repository takes `?PDO $db = null` and connects on its first query;
+        // building the connection to fill that parameter would open one on
+        // every page that builds a repository, asked a question or not.
+        $ran = 0;
+        $this->container->bind(Greeter::class, static function () use (&$ran): Greeter {
+            $ran++;
+
+            return new Greeter();
+        });
+
+        self::assertNull($this->container->get(OptionalGreeter::class)->greeter);
+        self::assertSame(0, $ran, 'the factory must not have run');
+    }
+
+    #[TestDox('an optional dependency that already exists is still injected')]
+    public function testOptionalParametersUseAnAlreadyBuiltEntry(): void {
+        // Deferring work is the point; refusing to share would be a different
+        // and much less useful rule.
+        $greeter = new Greeter();
+        $this->container->instance(Greeter::class, $greeter);
+
+        self::assertSame($greeter, $this->container->get(OptionalGreeter::class)->greeter);
+    }
+
+    #[TestDox('a required dependency still runs its factory')]
+    public function testRequiredParametersStillRunFactories(): void {
+        $this->container->bind(GreeterInterface::class, static fn (): GreeterInterface => new Greeter());
+
+        self::assertInstanceOf(Greeter::class, $this->container->get(NeedsGreeter::class)->greeter);
+    }
+
+    #[TestDox('an optional dependency with no binding is still autowired')]
+    public function testOptionalParametersStillAutowirePlainClasses(): void {
+        // The rule is about not running factories, not about ignoring
+        // optional parameters: a plain class costs nothing to build.
+        self::assertInstanceOf(Greeter::class, $this->container->get(OptionalGreeter::class)->greeter);
     }
 
     // -----------------------------------------------------------------

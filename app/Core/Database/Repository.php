@@ -160,6 +160,16 @@ abstract class Repository {
 
         $statement->execute();
 
+        // Named columns only, whatever the connection's default fetch mode is.
+        // PDO's own default is FETCH_BOTH, which returns every column twice -
+        // once by name and once by position - and Model keeps what it does not
+        // recognise, so the positional copies end up in its bag of attributes
+        // and from there in toArray() and the JSON. A column deliberately kept
+        // out of a model, a password hash above all, would be published by its
+        // numeric twin. Connection sets ASSOC for the application's own handle;
+        // this is for every other one, which Repository explicitly allows.
+        $statement->setFetchMode(PDO::FETCH_ASSOC);
+
         return $statement;
     }
 

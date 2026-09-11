@@ -2,6 +2,7 @@
 
 namespace Modules\Auth;
 
+use App\Core\Database\Connection;
 use PDO;
 
 /**
@@ -22,14 +23,24 @@ final class ApiTokens {
 
     private const PREFIX = 'cst_';
 
-    public function __construct(private PDO $db, private UserRepository $users) {
+    public function __construct(private UserRepository $users, private ?PDO $db = null) {
+    }
+
+    /**
+     * The connection, on first use.
+     *
+     * Lazily, so injecting this service opens nothing: a page that only asks
+     * whether anyone is signed in must not connect to the database at all.
+     */
+    private function db(): PDO {
+        return $this->db ??= Connection::get();
     }
 
     /** Issues a token and returns its plaintext - the only time it exists. */
     public function issue(User $user, string $name): string {
         $plain = self::PREFIX . bin2hex(random_bytes(32));
 
-        $this->db->prepare(sprintf(
+        $this->db()->prepare(sprintf(
             'INSERT INTO %s (user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?)',
             self::TABLE,
         ))->execute([$user->id, $name, self::hash($plain), date('Y-m-d H:i:s')]);
@@ -49,7 +60,7 @@ final class ApiTokens {
             return null;
         }
 
-        $statement = $this->db->prepare(sprintf('SELECT id, user_id FROM %s WHERE token_hash = ?', self::TABLE));
+        $statement = $this->db()->prepare(sprintf('SELECT id, user_id FROM %s WHERE token_hash = ?', self::TABLE));
         $statement->execute([self::hash($plain)]);
         $row = $statement->fetch(PDO::FETCH_ASSOC);
 
@@ -57,14 +68,14 @@ final class ApiTokens {
             return null;
         }
 
-        $this->db->prepare(sprintf('UPDATE %s SET last_used_at = ? WHERE id = ?', self::TABLE))
+        $this->db()->prepare(sprintf('UPDATE %s SET last_used_at = ? WHERE id = ?', self::TABLE))
             ->execute([date('Y-m-d H:i:s'), $row['id']]);
 
         return $this->users->findById((int) $row['user_id']);
     }
 
     public function revoke(string $plain): bool {
-        $statement = $this->db->prepare(sprintf('DELETE FROM %s WHERE token_hash = ?', self::TABLE));
+        $statement = $this->db()->prepare(sprintf('DELETE FROM %s WHERE token_hash = ?', self::TABLE));
         $statement->execute([self::hash($plain)]);
 
         return $statement->rowCount() > 0;
@@ -72,7 +83,7 @@ final class ApiTokens {
 
     /** Revokes every token a user has - what "sign out everywhere" needs. */
     public function revokeAll(User $user): int {
-        $statement = $this->db->prepare(sprintf('DELETE FROM %s WHERE user_id = ?', self::TABLE));
+        $statement = $this->db()->prepare(sprintf('DELETE FROM %s WHERE user_id = ?', self::TABLE));
         $statement->execute([$user->id]);
 
         return $statement->rowCount();
