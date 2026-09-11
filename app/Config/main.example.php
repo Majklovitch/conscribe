@@ -47,8 +47,13 @@ return [
     //
     // A provider returns rows of parameter values (['slug' => 'hello']) or ready
     // App\Services\Sitemap\SitemapUrl objects when it can supply a lastmod.
-    'modules' => [ // list of modules to load, in order
+    // Modules to load, in order. With this key present, a module that is not
+    // listed is off - its routes, commands and migrations included - so a
+    // module added to app/Modules/ must be added here too. Remove the key to
+    // load everything found.
+    'modules' => [
         'LanguageMutations',
+        'Auth',
     ],
     'media' => [
         'driver'        => 'auto',          // 'auto' | 'imagick' | 'gd'

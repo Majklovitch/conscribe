@@ -415,7 +415,9 @@ replaces the built-in wording wholesale, which is where a translation goes.
 
 `app/Modules/Auth` is an ordinary module: its tables come from its own
 `migrations/` directory through `php tty migrate`, and its commands appear in
-`php tty`. Enabling it is the whole installation:
+`php tty`. If `app/Config/main.php` has a `modules` list, `'Auth'` has to be in
+it - a module missing from that list is off, silently. Beyond that, enabling it
+is the whole installation:
 
 ```bash
 php tty migrate
