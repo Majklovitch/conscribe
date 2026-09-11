@@ -670,7 +670,7 @@ class Router {
      * Referer would otherwise turn every invalid form into an open redirect.
      */
     private function validationFailed(ValidationException $e, Request $request): Response {
-        if ($this->wantsJson($request)) {
+        if ($request->wantsJson()) {
             return Response::json([
                 'message' => $e->getMessage(),
                 'errors' => $e->errors()->messages(),
@@ -683,22 +683,6 @@ class Router {
         return Response::redirect($this->backTo($request), 303);
     }
 
-    private function wantsJson(Request $request): bool {
-        if ($request->isAjax()) {
-            return true;
-        }
-
-        $accept = strtolower($request->getHeader('accept') ?? '');
-
-        // `application/json` before `text/html` in the Accept header is the
-        // clearest statement a client can make; a browser navigating always
-        // asks for HTML first.
-        if (str_contains($accept, 'application/json') && !str_contains($accept, 'text/html')) {
-            return true;
-        }
-
-        return str_contains(strtolower($request->getHeader('content-type') ?? ''), 'application/json');
-    }
 
     /**
      * Where to send a browser back to after a failed form.

@@ -689,6 +689,20 @@ public function send(Request $request, Session $session) { … }
 
 **Return contract.** An action must return a `Response` or a string. Anything else — usually a forgotten `return` — is logged as a 500 instead of rendering a silent blank page.
 
+**Errors for API clients.** A client that wants JSON - an XHR, a JSON body, or an
+`Accept` asking for JSON without HTML - gets an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)
+problem document instead of the error page, for every error the framework raises
+itself (404, 405, 419, a controller that cannot be built, an uncaught exception):
+
+```json
+{"type": "about:blank", "title": "Not Found", "status": 404, "detail": "Page not found.", "instance": "/api/orders/7"}
+```
+
+served as `application/problem+json`. 5xx detail is masked in production exactly
+as on the page, since a JSON body is no less public. `Request::wantsJson()` is the
+single place that decides who counts as an API client, so validation and error
+pages cannot disagree about it.
+
 **Error pages.** The router calls a handler registered by the application, so the core never needs to know about your models or templates:
 
 ```php

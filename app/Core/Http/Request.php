@@ -136,6 +136,35 @@ class Request {
     }
 
     /**
+     * Whether the client would rather have JSON than a page.
+     *
+     * Decides the shape of every answer the framework builds on its own - a
+     * failed validation, an error page - so it lives here rather than in each
+     * of them, and they cannot drift into disagreeing about who is an API
+     * client.
+     *
+     * An XHR, a JSON body, or an Accept header asking for JSON (including
+     * `+json` types such as `application/problem+json`) without also asking
+     * for HTML. The last condition matters: browsers send long Accept headers
+     * that often mention JSON, and HTML being in there at all means a person
+     * is looking at the result.
+     */
+    public function wantsJson(): bool {
+        if ($this->isAjax()) {
+            return true;
+        }
+
+        $accept = strtolower($this->getHeader('accept') ?? '');
+        $asksForJson = str_contains($accept, 'application/json') || str_contains($accept, '+json');
+
+        if ($asksForJson && !str_contains($accept, 'text/html')) {
+            return true;
+        }
+
+        return str_contains(strtolower($this->getHeader('content-type') ?? ''), 'json');
+    }
+
+    /**
      * Determines whether the request arrived over HTTPS.
      *
      * Only two signals are believed unconditionally, because only they come

@@ -48,6 +48,14 @@ class ErrorPage {
         $this->log($code, $message, $request);
 
         $public = $this->publicMessage($code, $message);
+
+        // An API client asked for data, and a rendered page - or plain text -
+        // is noise it has to special-case. It gets a problem document instead,
+        // with the same masking of 5xx detail the page applies.
+        if ($request->wantsJson()) {
+            return $this->problem($code, $public, $request);
+        }
+
         $view = $this->resolveView($code);
 
         if ($view !== null) {
@@ -72,6 +80,50 @@ class ErrorPage {
 
         return new Response("Error {$code}: {$public}", $code, ['Content-Type' => 'text/plain; charset=utf-8']);
     }
+
+    /**
+     * An RFC 9457 problem document (the successor of RFC 7807).
+     *
+     * A standard shape rather than one invented here, so a client library that
+     * already understands problem+json needs nothing project-specific:
+     *
+     *   {"type": "about:blank", "title": "Not Found", "status": 404,
+     *    "detail": "Page not found.", "instance": "/api/orders/7"}
+     *
+     * `about:blank` is what the RFC prescribes when the status code says it
+     * all - which, for errors the framework raises itself, it does.
+     */
+    protected function problem(int $code, string $detail, Request $request): Response {
+        $body = json_encode([
+            'type'     => 'about:blank',
+            'title'    => self::TITLES[$code] ?? (intdiv($code, 100) === 5 ? 'Server Error' : 'Client Error'),
+            'status'   => $code,
+            'detail'   => $detail,
+            'instance' => '/' . $request->getPath(),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        return new Response((string) $body, $code, ['Content-Type' => 'application/problem+json']);
+    }
+
+    /**
+     * Reason phrases for the codes this framework answers with itself. The
+     * `title` of a problem document is meant to be the same for every
+     * occurrence of the problem, so it is the phrase, never the message.
+     */
+    private const TITLES = [
+        400 => 'Bad Request',
+        401 => 'Unauthorized',
+        403 => 'Forbidden',
+        404 => 'Not Found',
+        405 => 'Method Not Allowed',
+        409 => 'Conflict',
+        419 => 'Page Expired',
+        422 => 'Unprocessable Content',
+        429 => 'Too Many Requests',
+        500 => 'Internal Server Error',
+        502 => 'Bad Gateway',
+        503 => 'Service Unavailable',
+    ];
 
     /**
      * The first template that exists, from the most specific to the most
