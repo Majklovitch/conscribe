@@ -612,8 +612,23 @@ or build it from the `cors` section of the configuration with `Cors::fromConfig(
 It answers the browser's preflight (`OPTIONS` with `Access-Control-Request-Method`)
 itself, adds `Access-Control-Allow-Origin` to responses for allowed origins, and
 marks responses `Vary: Origin` so a shared cache cannot hand one site's answer to
-another. A group's middleware also runs for `OPTIONS` on its paths, which is what
-lets a group-scoped `Cors` see the preflight at all.
+another. A group's middleware also runs for `OPTIONS` and `405` on its paths,
+which is what lets a group-scoped `Cors` see the preflight at all.
+
+**`Cors` must come first in a route's list**, and the router refuses the route
+otherwise. A preflight carries no credentials, so authentication placed ahead of
+it answers 401 and every cross-origin call fails with an error that points
+nowhere near the cause:
+
+```php
+['middleware' => [new Cors($origins), RequireLogin::class]]   // works
+['middleware' => [RequireLogin::class, new Cors($origins)]]   // refused at declaration
+```
+
+Responses built outside any route - a `404` for a path nothing is registered
+under, or an exception that escapes to the error handler - carry no CORS
+headers from a group-scoped `Cors`. Register it globally with
+`$router->middleware(...)` if cross-origin clients need to read those too.
 
 Two usual mistakes it refuses to make: it never reflects an arbitrary `Origin`
 back (that is `*` in disguise), and it will not be constructed with `*` and

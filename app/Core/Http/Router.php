@@ -3,6 +3,7 @@
 namespace App\Core\Http;
 
 use App\Core\Container\Container;
+use App\Core\Http\Middleware\Cors;
 use App\Core\Http\Middleware\MiddlewareException;
 use App\Core\Http\Middleware\MiddlewareInterface;
 use App\Core\Http\Middleware\Pipeline;
@@ -220,6 +221,8 @@ class Router {
             'url'     => $url,
             'options' => $this->mergeOptions($this->routeDefaults, $options),
         ];
+
+        $this->assertCorsRunsFirst($url, end($this->routes[$method])['options']['middleware'] ?? null);
     }
 
     /**
@@ -349,8 +352,12 @@ class Router {
         // The path exists, just under a different method => 405 instead of 404.
         $allowed = $this->allowedMethodsFor($uri, $lookupMethod);
         if ($allowed !== []) {
-            return $this->error(405, 'Method not allowed.', $request)
-                ->setHeader('Allow', implode(', ', $allowed));
+            // Through the path's middleware, like OPTIONS: a 405 built outside
+            // it carries no CORS headers, and a cross-origin client then sees
+            // an opaque CORS failure instead of the status that explains it.
+            return (new Pipeline(Pipeline::normalize($this->routeFor($uri)['options']['middleware'] ?? null), $this->container))
+                ->handle($request, fn (Request $request): Response => $this->error(405, 'Method not allowed.', $request)
+                    ->setHeader('Allow', implode(', ', $allowed)));
         }
 
         return $this->error(404, 'Page not found.', $request);
@@ -390,6 +397,29 @@ class Router {
         $token = $request->post('csrf_token') ?? $request->getHeader('x-csrf-token') ?? '';
 
         return $this->session->validateToken(is_string($token) ? $token : '');
+    }
+
+    /**
+     * Refuses a route whose middleware puts anything before Cors.
+     *
+     * A browser's preflight never carries credentials - no cookie, no
+     * Authorization header - so any middleware that runs before Cors and wants
+     * them answers 401, and every cross-origin call to the route fails with a
+     * CORS error that points nowhere near the cause. The order is the whole
+     * difference between a working and a broken API, and it is invisible in
+     * the route file, so it is enforced where the route is declared.
+     */
+    private function assertCorsRunsFirst(string $url, mixed $middleware): void {
+        foreach (Pipeline::normalize($middleware) as $position => $entry) {
+            $isCors = $entry instanceof Cors || $entry === Cors::class;
+
+            if ($isCors && $position > 0) {
+                throw new \InvalidArgumentException(sprintf(
+                    "Route '%s' runs middleware before Cors. A preflight carries no credentials, so anything ahead of Cors - authentication above all - would reject it and break every cross-origin call. Put Cors first in the list.",
+                    $url,
+                ));
+            }
+        }
     }
 
     /**

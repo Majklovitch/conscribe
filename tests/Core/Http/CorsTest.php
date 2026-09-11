@@ -15,6 +15,15 @@ use PHPUnit\Framework\TestCase;
 use Tests\Support\FakeSession;
 use Tests\Support\RequestFactory;
 
+/** Rejects anything without an Authorization header, as a login check would. */
+final class RequiresAuth implements \App\Core\Http\Middleware\MiddlewareInterface {
+    public function process(Request $request, callable $next): Response {
+        return $request->getHeader('authorization') !== null
+            ? $next($request)
+            : Response::json(['error' => 'unauthenticated'], 401);
+    }
+}
+
 #[CoversClass(Cors::class)]
 final class CorsTest extends TestCase {
     private const APP = 'https://app.example.cz';
@@ -214,6 +223,60 @@ final class CorsTest extends TestCase {
         );
 
         self::assertSame('X-Custom, Content-Type', $response->getHeader('Access-Control-Allow-Headers'));
+    }
+
+    // -----------------------------------------------------------------
+    // Interaction with the router
+    // -----------------------------------------------------------------
+
+    #[TestDox('Cors before authentication lets the preflight through')]
+    public function testCorsBeforeAuthLetsThePreflightThrough(): void {
+        $router = new Router(new FakeSession());
+        $router->group(['middleware' => [new Cors([self::APP]), RequiresAuth::class]], static function (Router $router): void {
+            $router->get('api/me', static fn (): Response => Response::json([]));
+        });
+
+        $response = $router->handle($this->request('OPTIONS', 'api/me', [
+            'Origin' => self::APP,
+            'Access-Control-Request-Method' => 'GET',
+        ]));
+
+        self::assertSame(204, $response->getStatusCode());
+        self::assertSame(self::APP, $response->getHeader('Access-Control-Allow-Origin'));
+    }
+
+    #[TestDox('anything before Cors in a route is refused when the route is declared')]
+    public function testMiddlewareBeforeCorsIsRefused(): void {
+        // A preflight carries no credentials, so authentication ahead of Cors
+        // answers 401 and every cross-origin call fails with an error that
+        // points nowhere near the cause.
+        $router = new Router(new FakeSession());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Put Cors first');
+
+        $router->group(['middleware' => [RequiresAuth::class, new Cors([self::APP])]], static function (Router $router): void {
+            $router->get('api/me', static fn (): Response => Response::json([]));
+        });
+    }
+
+    #[TestDox('the check also sees Cors given by class name')]
+    public function testCorsByClassNameIsChecked(): void {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new Router(new FakeSession()))->get('x', static fn (): string => '', [
+            'middleware' => [RequiresAuth::class, Cors::class],
+        ]);
+    }
+
+    #[TestDox('a 405 carries the CORS headers, so the client sees the real status')]
+    public function testMethodNotAllowedIsDecorated(): void {
+        $response = $this->router(new Cors([self::APP]))->handle(
+            $this->request('PATCH', 'api/orders', ['Origin' => self::APP]),
+        );
+
+        self::assertSame(405, $response->getStatusCode());
+        self::assertSame(self::APP, $response->getHeader('Access-Control-Allow-Origin'));
     }
 
     public function testExposedHeaders(): void {
