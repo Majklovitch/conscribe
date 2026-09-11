@@ -353,10 +353,14 @@ drop whatever else the form posted.
 **The router decides the shape of a failure.** A browser gets its input and the
 messages flashed and is redirected back to the page it came from (303, so the
 browser follows with GET). Anything that wants JSON — `Accept: application/json`
-without `text/html`, an XHR, or a JSON body — gets `422` instead:
+without `text/html`, an XHR, or a JSON body — gets `422` instead, as the same
+`application/problem+json` document every other API error uses, with the
+per-field messages as an `errors` extension member:
 
 ```json
-{ "message": "The given data was invalid.", "errors": { "email": ["The email must be a valid email address."] } }
+{"type": "about:blank", "title": "Unprocessable Content", "status": 422,
+ "detail": "The given data was invalid.", "instance": "/contact",
+ "errors": {"email": ["The email must be a valid email address."]}}
 ```
 
 The `Referer` is attacker-controllable, so it is checked before it is followed; a
@@ -698,7 +702,9 @@ itself (404, 405, 419, a controller that cannot be built, an uncaught exception)
 {"type": "about:blank", "title": "Not Found", "status": 404, "detail": "Page not found.", "instance": "/api/orders/7"}
 ```
 
-served as `application/problem+json`. 5xx detail is masked in production exactly
+served as `application/problem+json` - and a failed validation uses the same document,
+so a client parses every error one way. The router answers in it even with no
+`ErrorPage` registered. 5xx detail is masked in production exactly
 as on the page, since a JSON body is no less public. `Request::wantsJson()` is the
 single place that decides who counts as an API client, so validation and error
 pages cannot disagree about it.

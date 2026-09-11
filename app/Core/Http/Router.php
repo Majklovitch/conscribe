@@ -671,10 +671,12 @@ class Router {
      */
     private function validationFailed(ValidationException $e, Request $request): Response {
         if ($request->wantsJson()) {
-            return Response::json([
-                'message' => $e->getMessage(),
+            // A problem document like every other API error, with the per-field
+            // messages as an extension member - a client should not need a
+            // second parser just for validation.
+            return Response::problem(422, $e->getMessage(), [
                 'errors' => $e->errors()->messages(),
-            ], 422);
+            ], '/' . $request->getPath());
         }
 
         $this->session->flash('errors', $e->errors()->messages());
@@ -716,6 +718,14 @@ class Router {
             if ($response instanceof Response) {
                 return $response;
             }
+        }
+
+        // No handler registered: still answer an API client in its own format,
+        // so the core speaks problem+json even without the application's
+        // ErrorPage. The message is not masked here - without a handler there
+        // is no environment policy to apply, and this is the bare-core path.
+        if ($request->wantsJson()) {
+            return Response::problem($code, $message, instance: '/' . $request->getPath());
         }
 
         return new Response("Error {$code}: {$message}", $code, ['Content-Type' => 'text/plain; charset=utf-8']);

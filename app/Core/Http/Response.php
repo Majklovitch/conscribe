@@ -153,6 +153,58 @@ class Response {
      *
      * @throws InvalidArgumentException
      */
+    /**
+     * An RFC 9457 problem document (the successor of RFC 7807).
+     *
+     * The one shape every error sent to an API client takes - error pages,
+     * failed validation, the router's own fallback - so a client parses errors
+     * one way whatever raised them. Extension members ride alongside the
+     * standard ones, which is how a 422 carries its per-field messages:
+     *
+     *   Response::problem(422, 'The given data was invalid.', ['errors' => [...]]);
+     *
+     * `type` is about:blank, as the RFC prescribes when the status code says it
+     * all; `title` is the reason phrase, never the message, because the RFC
+     * wants it identical for every occurrence of the problem.
+     *
+     * @param array<string, mixed> $extensions extra members; cannot replace the standard ones
+     */
+    public static function problem(int $status, string $detail, array $extensions = [], ?string $instance = null): self {
+        $document = [
+            'type'   => 'about:blank',
+            'title'  => self::PROBLEM_TITLES[$status] ?? (intdiv($status, 100) === 5 ? 'Server Error' : 'Client Error'),
+            'status' => $status,
+            'detail' => $detail,
+        ];
+
+        if ($instance !== null) {
+            $document['instance'] = $instance;
+        }
+
+        $body = json_encode(
+            $document + $extensions,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+
+        return new self((string) $body, $status, ['Content-Type' => 'application/problem+json']);
+    }
+
+    /** Reason phrases for the codes the framework answers with itself. */
+    private const PROBLEM_TITLES = [
+        400 => 'Bad Request',
+        401 => 'Unauthorized',
+        403 => 'Forbidden',
+        404 => 'Not Found',
+        405 => 'Method Not Allowed',
+        409 => 'Conflict',
+        419 => 'Page Expired',
+        422 => 'Unprocessable Content',
+        429 => 'Too Many Requests',
+        500 => 'Internal Server Error',
+        502 => 'Bad Gateway',
+        503 => 'Service Unavailable',
+    ];
+
     public static function redirect(string $url, int $statusCode = 302, array $headers = []): self {
         $headers['Location'] = self::sanitizeRedirectUrl($url);
         return new self('', $statusCode, $headers);

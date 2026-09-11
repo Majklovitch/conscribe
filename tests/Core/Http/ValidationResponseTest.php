@@ -79,7 +79,14 @@ final class ValidationResponseTest extends TestCase {
 
         self::assertSame(422, $response->getStatusCode());
 
+        // The same problem+json shape as every other API error, with the
+        // per-field messages as an extension member - one parser for a client.
+        self::assertSame('application/problem+json', $response->getHeader('Content-Type'));
+
         $body = json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame('Unprocessable Content', $body['title']);
+        self::assertSame(422, $body['status']);
+        self::assertSame('/contact', $body['instance']);
         self::assertSame(
             ['email' => ['The email must be a valid email address.']],
             $body['errors'],

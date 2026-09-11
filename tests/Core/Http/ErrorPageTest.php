@@ -120,6 +120,29 @@ final class ErrorPageTest extends TestCase {
         self::assertSame(418, $problem['status']);
     }
 
+    #[TestDox('a router with no ErrorPage still answers a JSON client in problem+json')]
+    public function testBareRouterSpeaksProblemJson(): void {
+        // The core must not depend on the application's ErrorPage to give an
+        // API client something it can parse.
+        $router = new Router(new FakeSession());
+
+        $json = $router->handle(RequestFactory::make('GET', 'nope', [], ['HTTP_ACCEPT' => 'application/json']));
+        $plain = $router->handle(RequestFactory::make('GET', 'nope'));
+
+        self::assertSame('application/problem+json', $json->getHeader('Content-Type'));
+        self::assertSame('Not Found', $this->problemOf($json)['title']);
+        self::assertStringStartsWith('text/plain', (string) $plain->getHeader('Content-Type'));
+    }
+
+    #[TestDox('extension members cannot overwrite the standard ones')]
+    public function testExtensionsCannotReplaceStandardMembers(): void {
+        $problem = $this->problemOf(Response::problem(404, 'real', ['status' => 200, 'title' => 'fake', 'extra' => 1]));
+
+        self::assertSame(404, $problem['status']);
+        self::assertSame('Not Found', $problem['title']);
+        self::assertSame(1, $problem['extra']);
+    }
+
     #[TestDox('through the router, a 405 keeps its Allow header in the JSON answer')]
     public function testRouterErrorsUseIt(): void {
         $router = new Router(new FakeSession());
