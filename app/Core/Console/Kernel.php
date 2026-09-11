@@ -93,12 +93,21 @@ final class Kernel {
      * able to say what `migrate` is for.
      */
     public function descriptionOf(string $name): string {
+        return $this->defaultOf($name, 'description');
+    }
+
+    /** A command's usage text - read the same way, without building it. */
+    public function helpOf(string $name): string {
+        return $this->defaultOf($name, 'help');
+    }
+
+    private function defaultOf(string $name, string $property): string {
         $class = $this->commands[$name] ?? null;
         if ($class === null) {
             return '';
         }
 
-        $default = (new \ReflectionClass($class))->getDefaultProperties()['description'] ?? '';
+        $default = (new \ReflectionClass($class))->getDefaultProperties()[$property] ?? '';
 
         return is_string($default) ? $default : '';
     }

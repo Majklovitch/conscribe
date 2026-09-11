@@ -29,6 +29,12 @@ abstract class Module implements ModuleInterface {
         return [];
     }
 
+    public function migrations(): ?string {
+        $directory = $this->path() . '/migrations';
+
+        return is_dir($directory) ? $directory : null;
+    }
+
     public function helpers(): ?string {
         $file = $this->path() . '/helpers.php';
 

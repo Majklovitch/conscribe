@@ -256,6 +256,17 @@ final class ConsoleTest extends TestCase {
         self::assertStringNotContainsString('nothing', $this->stdout(), 'the command itself must not have run');
     }
 
+    #[TestDox('help works for a command whose dependencies cannot be built')]
+    public function testHelpDoesNotBuildTheCommand(): void {
+        // Like list: help for `migrate` has to work where there is no
+        // database, which is exactly when someone reads it.
+        $kernel = new Kernel();
+        $kernel->register(NeedsUnbuildable::class);
+
+        self::assertSame(Command::SUCCESS, $kernel->run(['tty', 'help', 'unbuildable'], $this->output));
+        self::assertStringContainsString('Cannot be built.', $this->stdout());
+    }
+
     public function testHelpWithoutACommandNameFails(): void {
         self::assertSame(Command::FAILURE, $this->kernel()->run(['tty', 'help'], $this->output));
     }

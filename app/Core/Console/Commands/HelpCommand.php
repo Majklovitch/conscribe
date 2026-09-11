@@ -30,14 +30,16 @@ final class HelpCommand extends Command {
             return self::FAILURE;
         }
 
-        $command = $this->kernel->resolve($name);
+        // Read by reflection rather than from an instance, like `list`: help
+        // for `migrate` has to work on a machine with no database, which is
+        // exactly when someone reads it.
+        $output->title($name);
+        $output->line($this->kernel->descriptionOf($name));
 
-        $output->title($command->name());
-        $output->line($command->description());
-
-        if ($command->help() !== '') {
+        $help = $this->kernel->helpOf($name);
+        if ($help !== '') {
             $output->line();
-            $output->line($command->help());
+            $output->line($help);
         }
 
         return self::SUCCESS;

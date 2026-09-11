@@ -37,26 +37,27 @@ Now enjoy AI readme :D
 4. [Configuration](#configuration)
 5. [Container](#container)
 6. [Validation](#validation)
-7. [Migrations](#migrations)
-8. [Console](#console)
-9. [Middleware](#middleware)
-10. [Routing](#routing)
-11. [Controllers](#controllers)
-12. [Request](#request)
-13. [Response](#response)
-14. [Views & Layouts](#views--layouts)
-15. [Template Helpers](#template-helpers)
-16. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
-17. [Images & Media Pipeline](#images--media-pipeline)
-18. [Sessions, Flash & Old Input](#sessions-flash--old-input)
-19. [CSRF Protection](#csrf-protection)
-20. [Database Layer](#database-layer)
-21. [Logging & Error Handling](#logging--error-handling)
-22. [Modules](#modules)
-23. [Menu](#menu)
-24. [Tracking Codes](#tracking-codes)
-25. [Security Summary](#security-summary)
-26. [Deployment](#deployment)
+7. [Authentication](#authentication)
+8. [Migrations](#migrations)
+9. [Console](#console)
+10. [Middleware](#middleware)
+11. [Routing](#routing)
+12. [Controllers](#controllers)
+13. [Request](#request)
+14. [Response](#response)
+15. [Views & Layouts](#views--layouts)
+16. [Template Helpers](#template-helpers)
+17. [Asset Pipeline (SCSS & Minification)](#asset-pipeline-scss--minification)
+18. [Images & Media Pipeline](#images--media-pipeline)
+19. [Sessions, Flash & Old Input](#sessions-flash--old-input)
+20. [CSRF Protection](#csrf-protection)
+21. [Database Layer](#database-layer)
+22. [Logging & Error Handling](#logging--error-handling)
+23. [Modules](#modules)
+24. [Menu](#menu)
+25. [Tracking Codes](#tracking-codes)
+26. [Security Summary](#security-summary)
+27. [Deployment](#deployment)
 
 ---
 
@@ -67,6 +68,7 @@ Now enjoy AI readme :D
 | **Routing** | Explicit route table for `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, `{param}` placeholders, typed parameter casting, automatic `HEAD` and `OPTIONS` handling, `405 Method Not Allowed` with an `Allow` header, pluggable error pages |
 | **Controllers** | Base class with `render()`, `json()`, `redirect()`; `Request` and `Session` injected by reflection into action signatures; constructor dependencies autowired |
 | **Container** | PSR-11, autowiring by constructor reflection, shared entries by default, `make()` for fresh ones, cycles reported as the chain that caused them |
+| **Auth module** | Users, session login with fixation defence and throttling, API tokens stored hashed, `RequireLogin` / `RequireToken` / `Guest` middleware, `user:create` / `token:create` |
 | **Validation** | Rule-based (`required|email|max:255`), closure rules, one message per field, custom messages; the router turns a failure into a redirect back with old input, or 422 JSON |
 | **Migrations** | Timestamped PHP migration files, batches, `migrate` / `migrate:rollback` / `migrate:status` / `make:migration`, drift detection |
 | **Console** | `php tty` with autowired commands, `list`/`help`, did-you-mean on a typo, colour that turns itself off in a pipe, modules can add their own |
@@ -407,6 +409,105 @@ message:
 
 **Custom messages** are keyed `field.rule` or just `rule`; `Messages::override()`
 replaces the built-in wording wholesale, which is where a translation goes.
+
+
+## Authentication
+
+`app/Modules/Auth` is an ordinary module: its tables come from its own
+`migrations/` directory through `php tty migrate`, and its commands appear in
+`php tty`. Enabling it is the whole installation:
+
+```bash
+php tty migrate
+php tty user:create jan@example.cz            # prints a generated password once
+php tty token:create jan@example.cz "mobile"  # prints an API token once
+```
+
+**Two ways in, one identity.** A browser signs in with a session; an API client
+sends `Authorization: Bearer <token>`. Either way a controller asks the same
+question:
+
+```php
+public function __construct(private Auth $auth) {
+}
+
+public function account(): Response {
+    return $this->render('account', ['user' => $this->auth->user()]);
+}
+```
+
+**Routes** are protected with middleware:
+
+```php
+use Modules\Auth\Middleware\{Guest, RequireLogin, RequireToken};
+
+$router->group(['middleware' => [Guest::class]], function (Router $router): void {
+    $router->get('login', [LoginController::class, 'form']);
+    $router->post('login', [LoginController::class, 'login']);
+});
+
+$router->group(['middleware' => [RequireLogin::class]], function (Router $router): void {
+    $router->get('account', [AccountController::class, 'show']);
+    $router->post('logout', [LoginController::class, 'logout']);
+});
+
+// A bearer token is not sent by the browser on its own - the attack CSRF
+// defends against - and an API client has no CSRF token to send.
+$router->group(['middleware' => [RequireToken::class], 'csrf' => false], function (Router $router): void {
+    $router->get('api/orders', [OrderApi::class, 'index']);
+});
+```
+
+The module ships no login page: how it looks is the site's business. A
+controller is a few lines:
+
+```php
+final class LoginController extends Controller {
+    public function __construct(private Auth $auth) {
+    }
+
+    public function login(Request $request): Response {
+        $data = $this->validate(['email' => 'required|email', 'password' => 'required']);
+
+        return match ($this->auth->attempt($data['email'], $data['password'], (string) $request->getClientIp())) {
+            LoginResult::Success   => $this->redirect($this->auth->intended('/account')),
+            LoginResult::Throttled => $this->redirect('/login?error=throttled'),
+            LoginResult::Failed    => $this->redirect('/login?error=credentials'),
+        };
+    }
+
+    public function logout(): Response {
+        $this->auth->logout();
+
+        return $this->redirect('/');
+    }
+}
+```
+
+`attempt()` returns one of three outcomes rather than a boolean, because "wrong
+password" and "wait" need different answers. `RequireLogin` sends a guest
+browser to `auth.login_url` (`/login`) and remembers where it was going, which
+`intended()` returns once; a guest API client gets a 401 problem document
+instead of a redirect it could not follow.
+
+**What it does so you do not have to:**
+
+- Passwords are hashed with `password_hash()` and upgraded on the next login
+  whenever the configured cost (`auth.hash_options`) or PHP's default changes.
+- A successful login rotates the session id (session fixation) and the CSRF
+  token.
+- Five failed logins for one email from one address lock that pair for fifteen
+  minutes. Per pair, so a guesser cannot lock the real owner out; the table
+  stores a hash of the pair, not the email.
+- An unknown email is checked against a decoy hash of the same cost, so the
+  response time does not reveal which accounts exist.
+- API tokens are 256 random bits with a `cst_` prefix, stored only as SHA-256,
+  and shown once. A user's password hash never appears in `toArray()` or JSON.
+- Checking whether someone is signed in never starts a session for a visitor
+  who has none, so a "Sign in" link in the page header costs guests no cookie.
+
+**Not included:** password reset and email verification (both need mail),
+roles and permissions, and "remember me".
 
 
 ## Migrations

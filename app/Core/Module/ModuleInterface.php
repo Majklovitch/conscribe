@@ -39,4 +39,13 @@ interface ModuleInterface {
      * @return array<int, class-string<\App\Core\Console\Command>>
      */
     public function commands(): array;
+
+    /**
+     * Absolute path to the directory holding the module's migrations, or null.
+     *
+     * Read by the migrator alongside database/migrations, so a module ships its
+     * own tables and `tty migrate` creates them - without the application
+     * copying files out of it.
+     */
+    public function migrations(): ?string;
 }

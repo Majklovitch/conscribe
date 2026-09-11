@@ -21,6 +21,10 @@
         <testsuite name="core">
             <directory>tests/Core</directory>
         </testsuite>
+        <!-- Modules may use a database; their tests run against SQLite in memory. -->
+        <testsuite name="modules">
+            <directory>tests/Modules</directory>
+        </testsuite>
     </testsuites>
 
     <source>

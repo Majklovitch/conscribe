@@ -110,6 +110,23 @@ class Session {
         return session_status() === PHP_SESSION_ACTIVE;
     }
 
+    /**
+     * Whether a session is already running, or the browser sent one to resume.
+     *
+     * Reading from the session starts it, and starting it sends a cookie - so
+     * code that only wants to know "is anyone signed in?" asks this first, and
+     * a visitor who never had a session is not given one just for looking.
+     */
+    public function exists(): bool {
+        if ($this->isStarted()) {
+            return true;
+        }
+
+        $name = (string) $this->config['name'] !== '' ? (string) $this->config['name'] : (string) session_name();
+
+        return isset($_COOKIE[$name]) && $_COOKIE[$name] !== '';
+    }
+
     public function id(): ?string {
         if (!$this->start()) {
             return null;

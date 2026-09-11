@@ -242,10 +242,22 @@ final class Bootstrap {
         // migrations live, and a constructor argument the container cannot see
         // is exactly what a binding is for. Lazy like the rest, so a request
         // that is not a migration never touches the database because of it.
-        $container->bind(Migrator::class, static fn (): Migrator => new Migrator(
-            Connection::get(),
-            self::root() . '/database/migrations',
-        ));
+        $container->bind(Migrator::class, static function (): Migrator {
+            // The application's own migrations first, then every enabled
+            // module's, so a module's tables are created by the same
+            // `tty migrate` as everything else. Order across directories is
+            // still by filename, which the timestamp prefix keeps meaningful.
+            $paths = [self::root() . '/database/migrations'];
+
+            foreach ((new ModuleManager())->modules() as $module) {
+                $directory = $module->migrations();
+                if ($directory !== null) {
+                    $paths[] = $directory;
+                }
+            }
+
+            return new Migrator(Connection::get(), $paths);
+        });
 
         return $container;
     }
