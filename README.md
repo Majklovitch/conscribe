@@ -70,7 +70,7 @@ Now enjoy AI readme :D
 | **Validation** | Rule-based (`required|email|max:255`), closure rules, one message per field, custom messages; the router turns a failure into a redirect back with old input, or 422 JSON |
 | **Migrations** | Timestamped PHP migration files, batches, `migrate` / `migrate:rollback` / `migrate:status` / `make:migration`, drift detection |
 | **Console** | `php tty` with autowired commands, `list`/`help`, did-you-mean on a typo, colour that turns itself off in a pipe, modules can add their own |
-| **Middleware** | Global and per-route/per-group pipeline, request rewriting, short-circuiting, class names resolved through the container |
+| **Middleware** | Global and per-route/per-group pipeline, request rewriting, short-circuiting, class names resolved through the container; a CORS middleware with origin whitelist, credentials and `Vary: Origin` |
 | **HTTP** | Immutable-ish `Request` (query/body/JSON/headers/cookies/files), `Response` with header canonicalization, response-splitting protection, cookies, and factories for HTML/JSON/redirect/no-content |
 | **Views** | Plain PHP templates with automatic header/footer layout wrapping, isolated variable scopes (`EXTR_SKIP`), path-traversal-safe resolution, reusable components |
 | **Helpers** | `esc()`, `dateFormat()`, `truncate()`, `asset()`, `image()`, `image_tag()`, `svg()`, `component()`, `flash()`, `old()`, `csrf_field()`, `renderTrackingCodes()` |
@@ -592,6 +592,34 @@ return $next($request->withPath($strippedPath));
 
 Route middleware wraps the CSRF check as well as the action, so an endpoint that
 authenticates some other way gets to run before anything can reject it.
+
+### CORS
+
+`Cors` is the one middleware the core ships, because an API whose frontend lives
+on another origin cannot work without it. Scope it to the routes that need it:
+
+```php
+use App\Core\Http\Middleware\Cors;
+
+$router->group(['middleware' => [new Cors(['https://app.example.cz'], credentials: true)]], function (Router $router): void {
+    $router->get('api/orders', [OrderApi::class, 'index']);
+    $router->delete('api/orders/{id}', [OrderApi::class, 'destroy']);
+});
+```
+
+or build it from the `cors` section of the configuration with `Cors::fromConfig()`.
+
+It answers the browser's preflight (`OPTIONS` with `Access-Control-Request-Method`)
+itself, adds `Access-Control-Allow-Origin` to responses for allowed origins, and
+marks responses `Vary: Origin` so a shared cache cannot hand one site's answer to
+another. A group's middleware also runs for `OPTIONS` on its paths, which is what
+lets a group-scoped `Cors` see the preflight at all.
+
+Two usual mistakes it refuses to make: it never reflects an arbitrary `Origin`
+back (that is `*` in disguise), and it will not be constructed with `*` and
+`credentials` together, which browsers reject. **CORS only tells a browser what
+page scripts may read** — it protects nothing from `curl`, so authentication still
+has to.
 
 
 ## Routing

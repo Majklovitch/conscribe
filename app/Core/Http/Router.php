@@ -314,9 +314,17 @@ class Router {
         if ($method === 'OPTIONS') {
             $allowed = $this->allowedMethodsFor($uri);
 
-            return $allowed === []
-                ? $this->error(404, 'Page not found.', $request)
-                : (new Response('', 204))->setHeader('Allow', implode(', ', $allowed));
+            if ($allowed === []) {
+                return $this->error(404, 'Page not found.', $request);
+            }
+
+            // Run through the middleware of the route this path belongs to, as
+            // the real request would be. Without that, anything a group
+            // declares never sees an OPTIONS - and a CORS middleware scoped to
+            // the API group, which is exactly where it belongs, would never get
+            // to answer the browser's preflight.
+            return (new Pipeline(Pipeline::normalize($this->routeFor($uri)['options']['middleware'] ?? null), $this->container))
+                ->handle($request, static fn (): Response => (new Response('', 204))->setHeader('Allow', implode(', ', $allowed)));
         }
 
         foreach ($this->routes[$lookupMethod] ?? [] as $route) {
@@ -382,6 +390,27 @@ class Router {
         $token = $request->post('csrf_token') ?? $request->getHeader('x-csrf-token') ?? '';
 
         return $this->session->validateToken(is_string($token) ? $token : '');
+    }
+
+    /**
+     * The first route matching a path under any method, in METHODS order.
+     *
+     * For OPTIONS, which has no table of its own: routes sharing a path almost
+     * always sit in the same group and carry the same middleware, so the first
+     * match speaks for the path.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function routeFor(string $uri): ?array {
+        foreach ($this->routes as $routes) {
+            foreach ($routes as $route) {
+                if (preg_match($route['pattern'], $uri)) {
+                    return $route;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
