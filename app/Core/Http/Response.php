@@ -216,7 +216,9 @@ class Response {
      * @throws InvalidArgumentException
      */
     public static function sanitizeRedirectUrl(string $url): string {
-        $url = trim(str_replace(["\r", "\n", "\0"], '', $url));
+        // Tabs too: browsers remove them from a URL before reading it, so
+        // "/\t/evil.com" arrives as "//evil.com".
+        $url = trim(str_replace(["\r", "\n", "\0", "\t"], '', $url));
 
         if ($url === '') {
             throw new InvalidArgumentException('Redirect URL must not be empty.');
@@ -240,7 +242,17 @@ class Response {
             throw new InvalidArgumentException("Refusing to redirect to external URL '{$url}'.");
         }
 
-        return '/' . ltrim($url, '/');
+        $local = '/' . ltrim($url, '/');
+
+        // Checked again on the result. Browsers read a backslash as a slash, so
+        // an input that starts with one - '\evil.com', '\/evil.com' - passes the
+        // check above and only becomes '/\evil.com', meaning '//evil.com', once
+        // the leading slash is prepended.
+        if (str_starts_with(str_replace('\\', '/', $local), '//')) {
+            throw new InvalidArgumentException("Refusing to redirect to external URL '{$url}'.");
+        }
+
+        return $local;
     }
 
     /**

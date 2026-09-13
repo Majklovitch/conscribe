@@ -14,8 +14,14 @@ RewriteEngine On
 # RewriteCond %{HTTPS} off
 # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+# Drop a trailing slash. The target is rebuilt from REQUEST_URI with every
+# leading slash collapsed into one, and nothing is redirected when the path
+# starts with a backslash: a request for //evil.com/ or /\evil.com/ must not
+# become Location: //evil.com, which a browser follows off-site. The previous
+# rule, ^(.*)/$ -> /$1, did exactly that.
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)/$ /$1 [L,R=301]
+RewriteCond %{REQUEST_URI} ^/+([^/\\].*?)/+$
+RewriteRule ^ /%1 [L,R=301]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 

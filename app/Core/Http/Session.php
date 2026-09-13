@@ -327,10 +327,37 @@ class Session {
      * @param array<string, mixed> $input
      */
     public function flashInput(array $input): self {
-        // The CSRF token does not belong in a re-fill, it is always generated anew.
-        unset($input[self::TOKEN_KEY]);
+        return $this->flash(self::OLD_INPUT_KEY, self::withoutSecrets($input));
+    }
 
-        return $this->flash(self::OLD_INPUT_KEY, $input);
+    /**
+     * The input minus what must never be written to the session.
+     *
+     * Old input exists to refill a form, and a password is exactly what a form
+     * must not refill - yet a failed login is the commonest failed form, so
+     * without this every one of them would store the typed password in plain
+     * text in the session file. Any field whose name contains "password"
+     * (current_password, password_confirmation, ...) is dropped, as is the CSRF
+     * token, which is always generated anew. Nested arrays are filtered the
+     * same way.
+     *
+     * @param array<array-key, mixed> $input
+     * @return array<array-key, mixed>
+     */
+    public static function withoutSecrets(array $input): array {
+        $clean = [];
+
+        foreach ($input as $key => $value) {
+            $name = strtolower((string) $key);
+
+            if ($name === self::TOKEN_KEY || str_contains($name, 'password')) {
+                continue;
+            }
+
+            $clean[$key] = is_array($value) ? self::withoutSecrets($value) : $value;
+        }
+
+        return $clean;
     }
 
     public function old(string $key, mixed $default = ''): mixed {
