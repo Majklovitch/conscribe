@@ -49,8 +49,27 @@ class Request {
             ? null
             : (file_get_contents('php://input') ?: '');
 
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
         $bodyParams = $_POST;
+        $files = $_FILES;
         $hasInvalidJson = false;
+
+        // PHP fills $_POST and $_FILES for POST only. PUT, PATCH and DELETE
+        // arrive with the same encodings - from fetch(), from API clients - and
+        // would otherwise reach the application, and the CSRF check, with an
+        // empty body.
+        if (!in_array($method, ['GET', 'HEAD', 'POST'], true)) {
+            if (str_contains($contentType, 'multipart/form-data') && function_exists('request_parse_body')) {
+                try {
+                    [$bodyParams, $files] = request_parse_body();
+                } catch (\Throwable) {
+                    // A malformed body is treated as an empty one, as PHP
+                    // does for a malformed POST.
+                }
+            } elseif ($rawBody !== null) {
+                $bodyParams = self::parseUrlencoded($contentType, $rawBody) ?? $bodyParams;
+            }
+        }
 
         if ($rawBody !== null && str_contains($contentType, 'application/json')) {
             $decoded = json_decode($rawBody, true);
@@ -61,7 +80,7 @@ class Request {
             }
         }
 
-        return new self($_GET, $bodyParams, $_COOKIE, $_FILES, $_SERVER, $rawBody, $hasInvalidJson);
+        return new self($_GET, $bodyParams, $_COOKIE, $files, $_SERVER, $rawBody, $hasInvalidJson);
     }
 
     public function hasInvalidJson(): bool {
@@ -290,18 +309,73 @@ class Request {
     }
 
     /**
-     * Client IP address. Proxy headers are trusted only when the proxy itself is,
-     * so the default source is always REMOTE_ADDR.
+     * The client's address.
+     *
+     * REMOTE_ADDR, unless the request came through a proxy listed in
+     * 'conscribe.trusted_proxies'. Then X-Forwarded-For is walked from the
+     * right - the end the proxies wrote - past every address that is itself a
+     * trusted proxy, and the first one that is not is the client.
+     *
+     * The left-most entry is never taken on its own: the client writes that
+     * one, so taking it would let anyone claim any address - and a login
+     * throttle keyed on the address would then allow unlimited guesses.
+     *
+     * Trusting a configured proxy is the default because configuring it is the
+     * decision; before, every caller also had to pass true, and one that did
+     * not got the proxy's address for every visitor. A site listing no proxies
+     * gets REMOTE_ADDR as it always did. Pass false to insist on the direct
+     * peer.
      */
-    public function getClientIp(bool $trustProxy = false): ?string {
-        if ($trustProxy && self::isFromTrustedProxy($this->server)) {
-            $forwarded = $this->getHeader('x-forwarded-for');
-            if ($forwarded !== null && $forwarded !== '') {
-                return trim(explode(',', $forwarded)[0]);
+    public function getClientIp(bool $trustProxy = true): ?string {
+        $remote = $this->server['REMOTE_ADDR'] ?? null;
+
+        if (!$trustProxy || !self::isFromTrustedProxy($this->server)) {
+            return $remote;
+        }
+
+        $proxies = Config::get('conscribe.trusted_proxies', []);
+        $proxies = is_array($proxies) ? $proxies : [];
+        $hops = array_reverse(array_map('trim', explode(',', (string) $this->getHeader('x-forwarded-for', ''))));
+
+        foreach ($hops as $hop) {
+            // A hop that is not an address cannot be vouched for. Stop there
+            // rather than skip past it to something further left, which the
+            // client may have written.
+            if (filter_var($hop, FILTER_VALIDATE_IP) === false) {
+                break;
+            }
+
+            $trusted = false;
+            foreach ($proxies as $proxy) {
+                if (self::ipMatches($hop, (string) $proxy)) {
+                    $trusted = true;
+                    break;
+                }
+            }
+
+            if (!$trusted) {
+                return $hop;
             }
         }
 
-        return $this->server['REMOTE_ADDR'] ?? null;
+        return $remote;
+    }
+
+    /**
+     * An application/x-www-form-urlencoded body as an array, or null when the
+     * body has another type.
+     *
+     * @internal public so the parsing is testable without php://input
+     * @return array<array-key, mixed>|null
+     */
+    public static function parseUrlencoded(string $contentType, string $rawBody): ?array {
+        if (!str_contains(strtolower($contentType), 'application/x-www-form-urlencoded')) {
+            return null;
+        }
+
+        parse_str($rawBody, $parsed);
+
+        return $parsed;
     }
 
     /**
