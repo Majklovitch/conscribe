@@ -29,6 +29,9 @@ class ImageCache {
     private string $format;
     private int $maxDimension;
 
+    /** The source root with symlinks resolved, computed once - see realSourceRoot(). */
+    private ?string $realSourceRoot = null;
+
     public function __construct(
         string $sourceRoot,
         string $cacheRoot,
@@ -60,27 +63,38 @@ class ImageCache {
             return null;
         }
 
-        $source = $this->resolveSource($relative);
-        if ($source === null) {
-            return null;
-        }
-
         $width = $this->clampDimension($width);
         $height = $this->clampDimension($height);
         $format = isset($options['format']) ? $this->normalizeFormat((string) $options['format']) : $this->format;
 
         $cacheRelative = $this->cacheRelativePath($relative, $width, $height, $format);
         $cachePath = $this->cacheRoot . '/' . $cacheRelative;
+        $url = $this->cacheUrlBase . '/' . $cacheRelative;
 
-        $sourceTime = (int) filemtime($source);
+        // Fast path: a variant already generated and at least as new as its
+        // source. Two stat calls, both answered from PHP's stat cache - no
+        // realpath(), no getimagesize(), no graphics library.
+        //
+        // This used to validate the source first on every call, which cost
+        // more than rendering the rest of the page. The validation exists to
+        // decide whether a file may be *converted*; a variant only exists
+        // because its source once passed it, so it is not repeated on every
+        // render. normalizeRelativePath() has already refused '..' and NUL.
+        $sourceTime = @filemtime($this->sourceRoot . '/' . $relative);
+        if ($sourceTime !== false && $this->isFresh($cachePath, $sourceTime)) {
+            return $url;
+        }
 
-        // Fast path: a finished, fresh file - the graphics library never starts up.
-        if (!$this->isFresh($cachePath, $sourceTime)
-            && !$this->generate($source, $cachePath, $width, $height, $format)) {
+        $source = $this->resolveSource($relative);
+        if ($source === null) {
             return null;
         }
 
-        return $this->cacheUrlBase . '/' . $cacheRelative;
+        if (!$this->generate($source, $cachePath, $width, $height, $format)) {
+            return null;
+        }
+
+        return $url;
     }
 
     /**
@@ -194,8 +208,7 @@ class ImageCache {
         }
 
         $candidate = str_replace('\\', '/', $candidate);
-        $root = realpath($this->sourceRoot);
-        $root = $root === false ? $this->sourceRoot : str_replace('\\', '/', $root);
+        $root = $this->realSourceRoot();
 
         // A symlink or ".." pointing outside the root is rejected.
         if ($candidate !== $root && !str_starts_with($candidate, $root . '/')) {
@@ -207,6 +220,22 @@ class ImageCache {
         }
 
         return $candidate;
+    }
+
+    /**
+     * realpath() of the source root, once per instance.
+     *
+     * It was resolved again on every call, and on Windows realpath() is one
+     * of the slower filesystem calls; the root does not move between two
+     * images on the same page.
+     */
+    private function realSourceRoot(): string {
+        if ($this->realSourceRoot === null) {
+            $root = realpath($this->sourceRoot);
+            $this->realSourceRoot = $root === false ? $this->sourceRoot : str_replace('\\', '/', $root);
+        }
+
+        return $this->realSourceRoot;
     }
 
     private function normalizeRelativePath(string $path): ?string {
