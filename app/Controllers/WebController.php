@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use App\Core\Config;
+use App\Bootstrap;
 use App\Core\Http\Controller;
 use App\Models\Menu\MenuRepository;
 
@@ -28,7 +28,7 @@ class WebController extends Controller {
             'pageTitle' => 'Home',
             'pageDescription' => 'ConscribePHP - a lightweight PHP MVC base with a router, templates, CSRF protection, a database layer, logging, an image pipeline, a module system and security headers.',
             'menuItems' => $this->menuItems(),
-            'appVersion' => (string) Config::get('conscribe.ver', ''),
+            'appVersion' => Bootstrap::VERSION,
             'features' => $this->features(),
         ]);
     }
@@ -38,7 +38,7 @@ class WebController extends Controller {
             'pageTitle' => 'Test page',
             'pageDescription' => 'This page is here to check that the MVC framework works as expected.',
             'menuItems' => $this->menuItems(),
-            'appVersion' => (string) Config::get('conscribe.ver', ''),
+            'appVersion' => Bootstrap::VERSION,
         ]);
     }
 

@@ -40,6 +40,16 @@ use Psr\Log\LoggerInterface;
  *   Bootstrap::console();           bin/*.php
  */
 final class Bootstrap {
+    /**
+     * The framework's version.
+     *
+     * Code rather than configuration: app/Config/main.php is per machine and
+     * untracked, and a version kept there drifted - four copies disagreed
+     * about whether this was 1.3.9 or 1.4.0. README and CHANGELOG repeat it
+     * for readers; VersionTest fails the suite when either disagrees.
+     */
+    public const VERSION = '2.0.0';
+
     private bool $isDevelopment;
     private ErrorPage $errorPage;
     private ?Request $request = null;

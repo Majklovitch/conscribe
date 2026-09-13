@@ -2,10 +2,10 @@
 
 return [
     'conscribe' => [
-        'ver' => '1.4.0', // version of the framework, not your app
         'author' => 'Majklovitch', // make this whatever you want, i dont mind if you copy code
         'environment' => 'development', // 'development' | 'production'
         'base_url' => 'http://localhost:8080/', // the base URL of your site, used for generating absolute URLs
+                                                // and for the <loc> entries in /sitemap.xml
 
         // Reverse proxies whose X-Forwarded-* headers may be believed. Anyone
         // can send those headers, so an empty list (the default) means the

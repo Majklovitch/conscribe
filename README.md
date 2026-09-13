@@ -2,7 +2,7 @@
 
 Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
 
-**Version 1.3.9** · Requires **PHP 8.4+**
+**Version 2.0.0** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
 
 May work on 8.2. Older versions I didn't test cause I don't want to.
 
@@ -17,8 +17,7 @@ What I want to do in future:
 - [ ] Redo the welcome page to be more human and not AI generated
 - [ ] Add new features that will make the framework better (dunno what yet)
 - [ ] Add a 3rd party ORM or make my own (doctrine or mine)
-- [ ] Add a dependency injection container (php-di or something else)
-- [ ] Rewrite documentation in docs/reference_guide.md to be more human and not AI generated
+- [x] Add a dependency injection container (php-di or something else) - done in 2.0.0, a small PSR-11 one of our own
 - [ ] Create new modules??
 - [ ] Refactor Configs to php objects instead of arrays (maybe) - but make them in their own files and not in one big file
 - [ ] Maybe create an .ai folder for better AI integration?
@@ -94,67 +93,67 @@ Now enjoy AI readme :D
 ├── app/
 │   ├── Config/
 │   │   ├── main.example.php       # Configuration template → copy to main.php
-│   │   └── routes.php             # Route definitions
+│   │   ├── routes.php             # Route groups (public / admin)
+│   │   └── routes/                # public.php, admin.php
 │   ├── Controllers/
-│   │   ├── ErrorController.php    # Invokable error-page renderer
 │   │   └── WebController.php
 │   ├── Core/
 │   │   ├── Config.php             # Dot-notation config access
+│   │   ├── Console/               # tty kernel: Kernel, Command, Input, Output
+│   │   │   └── Commands/          # build, lint, list, help, migrate*, make:migration
+│   │   ├── Container/             # PSR-11 autowiring container
 │   │   ├── Database/
 │   │   │   ├── Connection.php     # Lazy PDO singleton
 │   │   │   ├── Model.php          # Data object base
-│   │   │   └── Repository.php     # Table access base
+│   │   │   ├── Repository.php     # Table access base
+│   │   │   └── Migrations/        # Migration, Migrator, MigrationRepository
 │   │   ├── Http/
 │   │   │   ├── Controller.php
+│   │   │   ├── Csp.php            # Content-Security-Policy header
+│   │   │   ├── ErrorPage.php      # Error pages, problem+json for API clients
 │   │   │   ├── Request.php
 │   │   │   ├── Response.php
 │   │   │   ├── Router.php
-│   │   │   └── Session.php
-│   │   ├── Logging/
-│   │   │   ├── ErrorHandler.php   # Global exception/fatal/warning handler
-│   │   │   └── Log.php            # PSR-3 logger factory
-│   │   ├── Module/
-│   │   │   ├── Module.php         # Default module implementation
-│   │   │   ├── ModuleInterface.php
-│   │   │   └── ModuleManager.php  # Discovery & boot
-│   │   └── Template/
-│   │       ├── View.php
-│   │       └── ViewNotFoundException.php
+│   │   │   ├── Session.php
+│   │   │   └── Middleware/        # Pipeline, MiddlewareInterface, Cors
+│   │   ├── Logging/               # ErrorHandler, Log (PSR-3), Tracy integration
+│   │   ├── Module/                # Module, ModuleInterface, ModuleManager
+│   │   ├── Template/              # View, ViewNotFoundException
+│   │   └── Validation/            # Validator, ErrorBag, Messages
 │   ├── Helpers/
 │   │   └── TemplateHelper.php     # Global functions, autoloaded by Composer
 │   ├── Models/
 │   │   └── Menu/                  # MenuItem, MenuRepository
-│   ├── Modules/                   # Optional drop-in modules
+│   ├── Modules/
+│   │   └── Auth/                  # Users, sessions, API tokens, its own migrations
 │   ├── Services/
-│   │   ├── MediaService.php       # Facade over ImageCache
-│   │   └── Media/
-│   │       ├── ImageCache.php     # Cache layout, freshness, purge
-│   │       ├── ImageProcessor.php # Driver contract
-│   │       ├── ImagickProcessor.php
-│   │       ├── GdProcessor.php
-│   │       └── ProcessorFactory.php
+│   │   ├── Assets/                # SCSS + JS build
+│   │   ├── Media/                 # Image cache, Imagick/GD drivers
+│   │   ├── MediaService.php       # Facade over the image cache
+│   │   └── Sitemap/               # sitemap.xml from the route table
 │   └── Views/
-│       ├── 404.php                # Error page template
+│       ├── errors/                # error.php (and optional 404.php, 4xx.php …)
 │       ├── home.php
 │       ├── test.php
-│       ├── components/            # Fragments rendered by component()
 │       └── layout/                # header.php, footer.php
 ├── assets/                        # Asset sources (compiled into public/)
 │   ├── scss/                      # main.scss + partials
 │   └── js/                        # main.js
-├── database/migrations/           # Timestamped migration files
 ├── bin/tty                        # Console kernel entry point
-├── tty                            # Shim, so it reads as `php tty`
+├── database/migrations/           # The application's own migrations
 ├── public/                        # Document root
 │   ├── css/  js/  img/  media/cache/
 │   ├── index.php                  # Front controller
 │   ├── .htaccess                  # Rewrite rules + asset caching
-│   ├── robots.txt  sitemap.xml  llms.txt
-├── storage/logs/                  # Rotating log files (git-ignored)
-├── docs/reference_guide.md
+│   └── robots.txt  llms.txt
+├── storage/                       # logs/ and exceptions/ (git-ignored contents)
+├── tests/                         # PHPUnit: Core/ and Modules/ suites
+├── tty                            # Shim, so the console reads as `php tty`
+├── CHANGELOG.md
 ├── Dockerfile
 ├── docker-compose.yml
 ├── docker-compose_db.yml          # Variant attaching to an external DB network
+├── phpstan.neon  phpunit.xml  .php-cs-fixer.dist.php
 └── composer.json
 ```
 
@@ -207,7 +206,6 @@ All configuration lives in `app/Config/main.php`, which is git-ignored. Copy it 
 ```php
 return [
     'conscribe' => [
-        'ver'         => '1.3.9',
         'author'      => 'Majklovitch',
         'environment' => 'development',       // 'development' | 'production'
         'base_url'    => 'http://localhost:8080/',
@@ -1300,9 +1298,9 @@ Log::get()->error('Payment gateway failed', ['exception' => $e]);
 
 ### What gets logged without you asking
 
-- **Error pages** — `ErrorController` logs every page it renders: 5xx as `error`, 405 as `warning`, 404 as `info`, together with method, path, IP, referer and user agent. Since the production threshold is `warning`, 404s make no noise unless you lower `log.level`.
+- **Error pages** — `App\Core\Http\ErrorPage` logs every error it answers, page or problem+json: 5xx as `error`, 405 and 419 as `warning`, 404 as `info`, together with method, path, IP, referer and user agent. Since the production threshold is `warning`, 404s make no noise unless you lower `log.level`.
 - **Actions returning nothing** — logged as a 500 rather than showing a blank page.
-- **Uncaught exceptions and fatal errors** — `App\Core\Logging\ErrorHandler`, registered in `public/index.php`, catches everything the router did not produce itself, logs it as `critical`/`alert`, discards half-rendered output, and sends the error page.
+- **Uncaught exceptions and fatal errors** — `App\Core\Logging\ErrorHandler`, registered by `App\Bootstrap`, catches everything the router did not produce itself, logs it as `critical`/`alert`, discards half-rendered output, and sends the error page.
 - **PHP warnings and notices** — logged with file, line and severity name; `@`-suppressed expressions are respected and skipped, and PHP still handles them normally afterwards.
 
 Both the logger and the error controller are built **lazily** — a successful request logs nothing, so Monolog is never loaded and the error page's database lookups never run.
