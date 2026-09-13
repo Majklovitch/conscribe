@@ -283,6 +283,9 @@ final class Bootstrap {
 
         $modules = new ModuleManager();
         $this->request = $modules->boot($this->request());
+        // Registered again: bootHttp() put the request into the container before
+        // any module had a chance to rewrite it.
+        $this->container()->instance(Request::class, $this->request);
         $modules->registerRoutes($router);
 
         require self::root() . '/app/Config/routes.php';

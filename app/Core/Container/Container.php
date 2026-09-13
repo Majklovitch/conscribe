@@ -251,6 +251,20 @@ class Container implements ContainerInterface {
                     return $parameter->getDefaultValue();
                 }
 
+                if ($parameter->isDefaultValueAvailable()) {
+                    // has() only says the class exists, not that its own
+                    // constructor can be satisfied. `?PDO $db = null` in a
+                    // container with no PDO binding is the case in point: PDO
+                    // needs a DSN nobody registered, and declaring the
+                    // parameter optional is exactly saying the class copes
+                    // without it.
+                    try {
+                        return $this->get($name);
+                    } catch (ContainerException) {
+                        return $parameter->getDefaultValue();
+                    }
+                }
+
                 return $this->get($name);
             }
 

@@ -297,6 +297,14 @@ class Router {
      * request - stripping a language prefix, say - is honoured by the matching.
      */
     private function dispatch(Request $request): Response {
+        // The request as it reaches routing, after every global middleware has
+        // had its say. Whatever the container builds from here on - a
+        // controller, a service taking Request in its constructor - gets this
+        // one, not the request from before a module or a middleware rewrote it.
+        if ($this->container instanceof Container) {
+            $this->container->instance(Request::class, $request);
+        }
+
         $uri = $request->getPath();
         $method = $request->getMethod();
 

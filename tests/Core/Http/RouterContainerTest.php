@@ -40,6 +40,16 @@ final class ClockController extends Controller {
     }
 }
 
+/** Takes the request in its constructor, as a service would. */
+final class PathController extends Controller {
+    public function __construct(private Request $seen) {
+    }
+
+    public function show(): Response {
+        return Response::json(['path' => $this->seen->getPath()]);
+    }
+}
+
 final class PlainController extends Controller {
     public function show(): Response {
         return Response::json(['plain' => true]);
@@ -100,6 +110,21 @@ final class RouterContainerTest extends TestCase {
         $response = $router->handle(RequestFactory::make('GET', 'here'));
 
         self::assertSame('here', $this->decode($response)['path'], 'the handled request, not the bound one');
+    }
+
+    #[TestDox('a Request injected into a constructor is the one being dispatched, after rewriting')]
+    public function testConstructorRequestIsTheRewrittenOne(): void {
+        $container = new Container();
+        // The request as Bootstrap registers it, before anything rewrote it.
+        $container->instance(Request::class, RequestFactory::make('GET', 'en/page'));
+
+        $router = $this->router($container);
+        $router->middleware(static fn (Request $request, callable $next): Response => $next($request->withPath('page')));
+        $router->get('page', [PathController::class, 'show']);
+
+        $response = $router->handle(RequestFactory::make('GET', 'en/page'));
+
+        self::assertSame(['path' => 'page'], $this->decode($response));
     }
 
     #[TestDox('the router still works without a container')]

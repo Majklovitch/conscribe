@@ -65,6 +65,12 @@ final class NeedsScalar {
     }
 }
 
+/** Its optional dependency exists as a class but cannot be autowired. */
+final class OptionalUnbuildable {
+    public function __construct(public ?NeedsScalar $dependency = null) {
+    }
+}
+
 final class UnionTyped {
     public function __construct(public int|string $value) {
     }
@@ -171,6 +177,13 @@ final class ContainerTest extends TestCase {
         $this->container->instance(Greeter::class, $greeter);
 
         self::assertSame($greeter, $this->container->get(OptionalGreeter::class)->greeter);
+    }
+
+    #[TestDox('an optional dependency that cannot be autowired falls back to its default')]
+    public function testOptionalUnbuildableDependencyUsesTheDefault(): void {
+        // The UserRepository case: `?PDO $db = null` in a container with no PDO
+        // binding threw on PDO's DSN instead of passing null.
+        self::assertNull($this->container->get(OptionalUnbuildable::class)->dependency);
     }
 
     #[TestDox('a required dependency still runs its factory')]
