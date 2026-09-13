@@ -72,6 +72,30 @@ behaviour an existing site relies on - read **Breaking** first.
   cost moves.
 - The console exits non-zero when a command fails, so `tty migrate && deploy`
   stops after a failed migration.
+- A failed validation no longer flashes passwords into the session: fields
+  named like a password, and the CSRF token, are dropped from old input.
+- `Response::sanitizeRedirectUrl()` refuses targets that start with a backslash
+  or contain a tab, which browsers read as `//host`.
+- The trailing-slash rule in `public/.htaccess` no longer turns `//evil.com/`
+  into `Location: //evil.com`.
+- `Request::getClientIp()` honours `trusted_proxies` by default and walks
+  `X-Forwarded-For` from the right. It used to return the proxy for every
+  visitor unless asked, and the client-written left-most entry when asked -
+  either of which defeated the login throttle behind a proxy.
+
+### Fixed
+
+- `PUT`, `PATCH` and `DELETE` bodies sent as forms (`x-www-form-urlencoded` or
+  `multipart/form-data`) are parsed; PHP does so for `POST` only, so they reached
+  validation and the CSRF check empty.
+- `min`, `max` and `between` measure a string of digits by its length unless the
+  field is `numeric` or `int`, so phone numbers and PINs validate.
+- A `nullable` field that was not sent is left out of the validated data instead
+  of being returned as `null`.
+- The container falls back to an optional parameter's default when the class
+  exists but cannot be autowired, instead of throwing.
+- A `Request` injected into a constructor is the request being dispatched, after
+  modules and middleware have rewritten it.
 
 ### Removed
 

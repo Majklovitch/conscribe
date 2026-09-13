@@ -387,11 +387,15 @@ argument contains a pipe — as a regex often does:
 
 `nullable` lets an untouched optional input through (it posts `''`, which
 `email` would otherwise reject); `sometimes` skips a field that was not sent at
-all, which is what a `PATCH` needs. **`0` counts as a value, not an absence** —
+all, which is what a `PATCH` needs. A `nullable` field that was not sent at all
+is left out of the result rather than returned as `null`, so an update cannot
+wipe it. **`0` counts as a value, not an absence** —
 a required quantity of zero must not read as "you forgot this".
 
 `min`/`max`/`between` measure what the value is: a number's value, a string's
-length, an array's count — and the message says so ("at least 8 characters" for
+length, an array's count. A string of digits counts as a number only when the
+field also has `numeric` or `int`, so a phone number or a PIN is measured by its
+length — and the message says so ("at least 8 characters" for
 a password, "at least 18" for an age).
 
 **Only the first failure of a field is reported.** Telling someone that their
@@ -884,7 +888,7 @@ $request->getHeader('accept');  // case-insensitive
 $request->getHeaders();
 $request->getRawBody();
 
-$request->getClientIp();            // REMOTE_ADDR
+$request->getClientIp();            // REMOTE_ADDR, or the client behind a trusted proxy
 $request->getClientIp(true);        // X-Forwarded-For, but only from a trusted proxy
 Request::isSecure();                // HTTPS / REQUEST_SCHEME / port 443, plus proxy headers
 ```
