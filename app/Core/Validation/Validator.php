@@ -41,6 +41,16 @@ final class Validator {
     private bool $ran = false;
 
     /**
+     * Whether the field being checked carries a numeric rule.
+     *
+     * Decides what min, max and between measure in a string of digits: its
+     * value for a number, its length for anything else. A phone number or a
+     * PIN is text that happens to be digits, and measuring "777123456" against
+     * max:20 by value rejected every phone number.
+     */
+    private bool $numeric = false;
+
+    /**
      * @param array<string, mixed>                          $data
      * @param array<string, string|array<int, string|Closure>> $rules
      * @param array<string, string>                         $messages field.rule => message
@@ -134,12 +144,18 @@ final class Validator {
         // have nothing to say about it - without it, `email` would reject the
         // empty string that an untouched optional input posts.
         if (in_array('nullable', $names, true) && $this->isEmpty($value)) {
-            $this->validated[$field] = $present ? $value : null;
+            // Only what was sent. An optional field that was absent, returned
+            // as null, would be written as null by an update and wipe what was
+            // stored.
+            if ($present) {
+                $this->validated[$field] = $value;
+            }
 
             return;
         }
 
         $failed = false;
+        $this->numeric = array_intersect(['numeric', 'int', 'integer'], $names) !== [];
 
         foreach ($rules as $rule) {
             if ($rule instanceof Closure) {
@@ -238,7 +254,8 @@ final class Validator {
      */
     private function size(mixed $value): float {
         return match (true) {
-            is_numeric($value) => (float) $value,
+            is_int($value), is_float($value) => (float) $value,
+            is_string($value) && $this->numeric && is_numeric($value) => (float) $value,
             is_string($value) => (float) mb_strlen($value),
             is_array($value) => (float) count($value),
             is_bool($value) => $value ? 1.0 : 0.0,
@@ -317,7 +334,8 @@ final class Validator {
      */
     private function typeOf(mixed $value): string {
         return match (true) {
-            is_numeric($value) => '',
+            is_int($value), is_float($value) => '',
+            is_string($value) && $this->numeric && is_numeric($value) => '',
             is_string($value) => 'string',
             is_array($value) => 'array',
             default => '',

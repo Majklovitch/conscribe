@@ -98,6 +98,29 @@ final class ValidatorTest extends TestCase {
         self::assertSame($expected, $validator->passes(), $validator->errors()->first('field'));
     }
 
+    #[TestDox('a string of digits is measured by its length unless the field is numeric')]
+    public function testDigitStringsAreMeasuredByLength(): void {
+        // A phone number or a PIN is text that happens to be digits.
+        self::assertTrue(Validator::make(['phone' => '777123456'], ['phone' => 'required|max:20'])->passes());
+        self::assertTrue(Validator::make(['pin' => '00001234'], ['pin' => 'required|min:8|max:8'])->passes());
+        self::assertSame(
+            'The pin must be at least 8 characters.',
+            Validator::make(['pin' => '1234'], ['pin' => 'min:8'])->errors()->first('pin'),
+        );
+
+        // With a numeric rule, the value is what counts.
+        self::assertFalse(Validator::make(['age' => '9'], ['age' => 'numeric|min:18'])->passes());
+        self::assertTrue(Validator::make(['qty' => '120'], ['qty' => 'int|max:500'])->passes());
+    }
+
+    #[TestDox('an optional field that was not sent is left out of the result')]
+    public function testAbsentNullableFieldIsNotReturned(): void {
+        // Returned as null it would be written as null by an update.
+        $data = Validator::make(['name' => 'Jan'], ['name' => 'required', 'website' => 'nullable|url'])->validate();
+
+        self::assertSame(['name' => 'Jan'], $data);
+    }
+
     #[TestDox('zero is a value, not an absence')]
     public function testZeroIsNotEmpty(): void {
         // The classic bug: a required quantity of 0 read as "you forgot this".
