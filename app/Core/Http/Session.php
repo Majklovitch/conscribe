@@ -127,6 +127,21 @@ class Session {
         return isset($_COOKIE[$name]) && $_COOKIE[$name] !== '';
     }
 
+    /**
+     * Starts the session in order to read from it - or does nothing, when
+     * there is no session to read.
+     *
+     * A read cannot find anything in a session that does not exist, and
+     * starting one to look writes a session file and sends a cookie. A page
+     * that merely checks for a flash message or old input would otherwise hand
+     * every anonymous visitor a session, which also makes the page uncacheable
+     * on a proxy or CDN - the opposite of what the lazy start promises. Writes
+     * still start the session; reads only resume one.
+     */
+    private function startForReading(): bool {
+        return $this->exists() && $this->start();
+    }
+
     public function id(): ?string {
         if (!$this->start()) {
             return null;
@@ -177,7 +192,7 @@ class Session {
     // --- Data ---------------------------------------------------------------
 
     public function get(string $key, mixed $default = null): mixed {
-        if (!$this->start()) {
+        if (!$this->startForReading()) {
             return $default;
         }
 
@@ -193,7 +208,7 @@ class Session {
     }
 
     public function has(string $key): bool {
-        return $this->start() && isset($_SESSION[$key]);
+        return $this->startForReading() && isset($_SESSION[$key]);
     }
 
     public function remove(string $key): self {
@@ -208,6 +223,10 @@ class Session {
      * Reads a value and removes it from the session in one go.
      */
     public function pull(string $key, mixed $default = null): mixed {
+        if (!$this->exists()) {
+            return $default;
+        }
+
         $value = $this->get($key, $default);
         $this->remove($key);
 
@@ -220,7 +239,7 @@ class Session {
      * @return array<string, mixed>
      */
     public function all(): array {
-        if (!$this->start()) {
+        if (!$this->startForReading()) {
             return [];
         }
 
@@ -260,7 +279,7 @@ class Session {
      * flashing and reading within a single request works too.
      */
     public function getFlash(string $key, mixed $default = null): mixed {
-        if (!$this->start()) {
+        if (!$this->startForReading()) {
             return $default;
         }
 
@@ -270,7 +289,7 @@ class Session {
     }
 
     public function hasFlash(string $key): bool {
-        if (!$this->start()) {
+        if (!$this->startForReading()) {
             return false;
         }
 
@@ -282,7 +301,7 @@ class Session {
      * @return array<string, mixed>
      */
     public function allFlash(): array {
-        if (!$this->start()) {
+        if (!$this->startForReading()) {
             return [];
         }
 
@@ -301,7 +320,7 @@ class Session {
      * @param string[]|null $keys null = all of them
      */
     public function keepFlash(?array $keys = null): self {
-        if (!$this->start()) {
+        if (!$this->startForReading()) {
             return $this;
         }
 
@@ -384,7 +403,7 @@ class Session {
     }
 
     public function validateToken(?string $token): bool {
-        if (!$this->isStarted() && !$this->start()) {
+        if (!$this->startForReading()) {
             return false;
         }
 
