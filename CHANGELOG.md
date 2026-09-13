@@ -36,6 +36,10 @@ behaviour an existing site relies on - read **Breaking** first.
   opens a connection on construction.
 - The router refuses, at registration, an unsupported HTTP method and a route
   whose middleware places anything before `Cors`.
+- **`Request::getClientIp()` trusts configured proxies by default.** With
+  `conscribe.trusted_proxies` set it returns the client from `X-Forwarded-For`
+  instead of the proxy's address; pass `false` for the direct peer. Sites with
+  no trusted proxies are unaffected.
 
 ### Added
 

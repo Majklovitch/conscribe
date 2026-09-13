@@ -260,7 +260,17 @@ class Container implements ContainerInterface {
                     // without it.
                     try {
                         return $this->get($name);
-                    } catch (ContainerException) {
+                    } catch (ContainerException $e) {
+                        // Only a failure to *resolve* falls back. A constructor
+                        // that ran and threw - a mailer missing its SMTP
+                        // settings, say - is a real error, and swallowing it
+                        // would turn "emails are broken" into "emails are
+                        // silently never sent". Those failures arrive wrapped,
+                        // with the original as the previous exception.
+                        if ($e->getPrevious() !== null) {
+                            throw $e;
+                        }
+
                         return $parameter->getDefaultValue();
                     }
                 }

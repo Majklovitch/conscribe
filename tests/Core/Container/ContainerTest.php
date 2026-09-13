@@ -71,6 +71,12 @@ final class OptionalUnbuildable {
     }
 }
 
+/** Its optional dependency can be built, but its constructor throws. */
+final class OptionalThrowing {
+    public function __construct(public ?Throws $dependency = null) {
+    }
+}
+
 final class UnionTyped {
     public function __construct(public int|string $value) {
     }
@@ -184,6 +190,19 @@ final class ContainerTest extends TestCase {
         // The UserRepository case: `?PDO $db = null` in a container with no PDO
         // binding threw on PDO's DSN instead of passing null.
         self::assertNull($this->container->get(OptionalUnbuildable::class)->dependency);
+    }
+
+    #[TestDox('an optional dependency whose constructor throws is still an error')]
+    public function testOptionalDependencyConstructorFailureIsNotSwallowed(): void {
+        // Falling back is for "cannot be resolved", not for "was built and
+        // broke" - that would turn a misconfigured service into one that
+        // silently does nothing.
+        try {
+            $this->container->get(OptionalThrowing::class);
+            self::fail('expected the constructor failure to surface');
+        } catch (ContainerException $e) {
+            self::assertInstanceOf(\DomainException::class, $e->getPrevious());
+        }
     }
 
     #[TestDox('a required dependency still runs its factory')]
