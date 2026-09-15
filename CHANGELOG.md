@@ -4,6 +4,28 @@ All notable changes to Conscribe PHP. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- **SQL panel in the Tracy bar.** In development, every statement sent through
+  `Connection` is listed with its bindings, time and error: repositories,
+  classes using `db()` directly, migrations, `exec()`/`query()` and
+  transactions with their savepoints. A statement repeated within a request is
+  flagged with its count, which is how an N+1 shows up. Recording is done by
+  `LoggingPdo`, which `Connection` builds only while `QueryLog` is on - where
+  the bar is shown - so production and the console get a plain `PDO`. At most
+  500 queries are kept per request; the count goes on past that.
+- `docs/NAVOD.md`, a Czech how-to for adding pages, forms, tables, APIs,
+  middleware, commands and modules.
+
+### Changed
+
+- `LazyConnection` provides `run()`, the typed-binding query helper that was
+  `Repository::run()`, and `ApiTokens` and `LoginThrottle` use it. Rows it
+  returns are fetched by column name for named placeholders too, not only
+  positional ones.
+
 ## 2.0.0 - 2026-09-13
 
 A major version because the base grew from a website boilerplate into one that

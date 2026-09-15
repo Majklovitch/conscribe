@@ -4,7 +4,6 @@ namespace App\Core\Database;
 
 use InvalidArgumentException;
 use PDO;
-use PDOStatement;
 use RuntimeException;
 
 /**
@@ -120,50 +119,6 @@ abstract class Repository {
         }
 
         return ' ORDER BY ' . implode(', ', $parts);
-    }
-
-    protected function run(string $sql, array $bindings = []): PDOStatement {
-        $statement = $this->db()->prepare($sql);
-
-        // Named placeholders (':id' => ...) are handed to execute() unchanged -
-        // they cannot be bound by position, and a subclass writing its own SQL
-        // is free to use them.
-        if ($bindings !== [] && !array_is_list($bindings)) {
-            $statement->execute($bindings);
-
-            return $statement;
-        }
-
-        // Positional bindings are bound one by one rather than through
-        // execute($bindings), because execute() sends every value as a string -
-        // and MySQL rejects a string in LIMIT/OFFSET once emulated prepares are
-        // off, which they are.
-        foreach ($bindings as $index => $value) {
-            $statement->bindValue(
-                $index + 1,
-                $value,
-                match (true) {
-                    is_int($value)  => PDO::PARAM_INT,
-                    is_bool($value) => PDO::PARAM_BOOL,
-                    $value === null => PDO::PARAM_NULL,
-                    default         => PDO::PARAM_STR,
-                },
-            );
-        }
-
-        $statement->execute();
-
-        // Named columns only, whatever the connection's default fetch mode is.
-        // PDO's own default is FETCH_BOTH, which returns every column twice -
-        // once by name and once by position - and Model keeps what it does not
-        // recognise, so the positional copies end up in its bag of attributes
-        // and from there in toArray() and the JSON. A column deliberately kept
-        // out of a model, a password hash above all, would be published by its
-        // numeric twin. Connection sets ASSOC for the application's own handle;
-        // this is for every other one, which Repository explicitly allows.
-        $statement->setFetchMode(PDO::FETCH_ASSOC);
-
-        return $statement;
     }
 
     public function find(mixed $id): Model|array|null {

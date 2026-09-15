@@ -121,6 +121,18 @@ class Connection {
         $charset = $config['charset'] ?? 'utf8mb4';
         $dsn = "mysql:host={$config['host']};dbname={$config['dbname']};charset={$charset}";
 
-        return new PDO($dsn, $config['user'], $config['pass'] ?? '', self::OPTIONS);
+        $class = self::pdoClass();
+
+        return new $class($dsn, $config['user'], $config['pass'] ?? '', self::OPTIONS);
+    }
+
+    /**
+     * LoggingPdo while the query log is on, a plain PDO otherwise - so the
+     * Tracy bar sees every statement and production pays nothing for it.
+     *
+     * @return class-string<PDO>
+     */
+    public static function pdoClass(): string {
+        return QueryLog::isEnabled() ? LoggingPdo::class : PDO::class;
     }
 }

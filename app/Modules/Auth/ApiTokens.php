@@ -33,10 +33,10 @@ final class ApiTokens {
     public function issue(User $user, string $name): string {
         $plain = self::PREFIX . bin2hex(random_bytes(32));
 
-        $this->db()->prepare(sprintf(
-            'INSERT INTO %s (user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?)',
-            self::TABLE,
-        ))->execute([$user->id, $name, self::hash($plain), date('Y-m-d H:i:s')]);
+        $this->run(
+            sprintf('INSERT INTO %s (user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?)', self::TABLE),
+            [$user->id, $name, self::hash($plain), date('Y-m-d H:i:s')],
+        );
 
         return $plain;
     }
@@ -53,33 +53,25 @@ final class ApiTokens {
             return null;
         }
 
-        $statement = $this->db()->prepare(sprintf('SELECT id, user_id FROM %s WHERE token_hash = ?', self::TABLE));
-        $statement->execute([self::hash($plain)]);
-        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        $row = $this->run(sprintf('SELECT id, user_id FROM %s WHERE token_hash = ?', self::TABLE), [self::hash($plain)])
+            ->fetch();
 
         if (!is_array($row)) {
             return null;
         }
 
-        $this->db()->prepare(sprintf('UPDATE %s SET last_used_at = ? WHERE id = ?', self::TABLE))
-            ->execute([date('Y-m-d H:i:s'), $row['id']]);
+        $this->run(sprintf('UPDATE %s SET last_used_at = ? WHERE id = ?', self::TABLE), [date('Y-m-d H:i:s'), (int) $row['id']]);
 
         return $this->users->findById((int) $row['user_id']);
     }
 
     public function revoke(string $plain): bool {
-        $statement = $this->db()->prepare(sprintf('DELETE FROM %s WHERE token_hash = ?', self::TABLE));
-        $statement->execute([self::hash($plain)]);
-
-        return $statement->rowCount() > 0;
+        return $this->run(sprintf('DELETE FROM %s WHERE token_hash = ?', self::TABLE), [self::hash($plain)])->rowCount() > 0;
     }
 
     /** Revokes every token a user has - what "sign out everywhere" needs. */
     public function revokeAll(User $user): int {
-        $statement = $this->db()->prepare(sprintf('DELETE FROM %s WHERE user_id = ?', self::TABLE));
-        $statement->execute([$user->id]);
-
-        return $statement->rowCount();
+        return $this->run(sprintf('DELETE FROM %s WHERE user_id = ?', self::TABLE), [$user->id])->rowCount();
     }
 
     private static function hash(string $plain): string {

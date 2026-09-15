@@ -2,6 +2,7 @@
 
 namespace App\Core\Logging;
 
+use App\Core\Database\QueryLog;
 use App\Core\Http\Request;
 use Psr\Log\LoggerInterface;
 use Tracy\Debugger;
@@ -69,9 +70,28 @@ class Debug {
 
         Debugger::enable(Debugger::Development);
         Debugger::getBar()->addPanel(self::requestPanel(), 'conscribe.request');
+
+        self::registerQueryPanel();
         self::logThroughTracy();
 
         return self::$enabled = true;
+    }
+
+    /**
+     * The SQL panel, only where the bar is shown: timing and keeping every
+     * query is a cost, and a console import would hold hundreds of them for
+     * nothing. Public so the decision can be tested without Tracy's handlers.
+     */
+    public static function registerQueryPanel(): void {
+        if (!Debugger::$showBar) {
+            return;
+        }
+
+        QueryLog::enable();
+
+        if (Debugger::getBar()->getPanel('conscribe.sql') === null) {
+            Debugger::getBar()->addPanel(new QueryPanel(), 'conscribe.sql');
+        }
     }
 
     public static function isEnabled(): bool {
