@@ -2,7 +2,7 @@
 
 namespace Modules\Auth;
 
-use App\Core\Database\Connection;
+use App\Core\Database\LazyConnection;
 use PDO;
 
 /**
@@ -17,23 +17,16 @@ use PDO;
  * lock that pair until the window ends. A successful login clears the count.
  */
 final class LoginThrottle {
+    use LazyConnection;
+
     public const TABLE = 'login_attempts';
 
     public function __construct(
-        private ?PDO $db = null,
+        ?PDO $db = null,
         private int $maxAttempts = 5,
         private int $decaySeconds = 900,
     ) {
-    }
-
-    /**
-     * The connection, on first use.
-     *
-     * Lazily, so injecting this service opens nothing: a page that only asks
-     * whether anyone is signed in must not connect to the database at all.
-     */
-    private function db(): PDO {
-        return $this->db ??= Connection::get();
+        $this->db = $db;
     }
 
     public static function keyFor(string $email, string $ip): string {

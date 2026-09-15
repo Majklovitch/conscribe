@@ -15,7 +15,7 @@ use Tracy\ILogger;
  * Monolog instead, so the log looks the same in both environments.
  */
 class TracyMonologAdapter implements ILogger {
-    private ?LoggerInterface $logger;
+    use LazyLogger;
 
     /**
      * @param LoggerInterface|null $logger null = default logger from the configuration (lazily)
@@ -55,13 +55,5 @@ class TracyMonologAdapter implements ILogger {
             ILogger::DEBUG     => 'debug',
             default            => 'info',
         };
-    }
-
-    /**
-     * Built on first use only - a request that logs nothing must not pull in
-     * Monolog, the same way ErrorHandler and ErrorPage do it.
-     */
-    private function logger(): LoggerInterface {
-        return $this->logger ??= Log::get();
     }
 }

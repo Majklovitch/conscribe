@@ -2,7 +2,7 @@
 
 namespace Modules\Auth;
 
-use App\Core\Database\Connection;
+use App\Core\Database\LazyConnection;
 use PDO;
 
 /**
@@ -19,21 +19,14 @@ use PDO;
  * hash itself, which only a deterministic hash allows.
  */
 final class ApiTokens {
+    use LazyConnection;
+
     public const TABLE = 'api_tokens';
 
     private const PREFIX = 'cst_';
 
-    public function __construct(private UserRepository $users, private ?PDO $db = null) {
-    }
-
-    /**
-     * The connection, on first use.
-     *
-     * Lazily, so injecting this service opens nothing: a page that only asks
-     * whether anyone is signed in must not connect to the database at all.
-     */
-    private function db(): PDO {
-        return $this->db ??= Connection::get();
+    public function __construct(private UserRepository $users, ?PDO $db = null) {
+        $this->db = $db;
     }
 
     /** Issues a token and returns its plaintext - the only time it exists. */

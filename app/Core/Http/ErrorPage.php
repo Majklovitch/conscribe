@@ -3,7 +3,7 @@
 namespace App\Core\Http;
 
 use App\Core\Config;
-use App\Core\Logging\Log;
+use App\Core\Logging\LazyLogger;
 use App\Core\Template\View;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -23,6 +23,8 @@ use Throwable;
  * working in an application that has no templates at all.
  */
 class ErrorPage {
+    use LazyLogger;
+
     /**
      * Extra template variables (the menu, for instance). It is a callable and
      * not an array because nothing is needed on a successful request - the
@@ -32,8 +34,6 @@ class ErrorPage {
      * @var (callable(Request): array)|null
      */
     private $viewData;
-
-    private ?LoggerInterface $logger;
 
     /**
      * @param (callable(Request): array)|null $viewData extra variables for the template
@@ -158,12 +158,5 @@ class ErrorPage {
             'referer' => $request->getHeader('referer'),
             'agent'   => $request->getHeader('user-agent'),
         ]);
-    }
-
-    /**
-     * Built on first use only - constructing the page must stay free.
-     */
-    protected function logger(): LoggerInterface {
-        return $this->logger ??= Log::get();
     }
 }

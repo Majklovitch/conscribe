@@ -6,7 +6,7 @@ use App\Core\Config;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\Http\Router;
-use App\Core\Logging\Log;
+use App\Core\Logging\LazyLogger;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -25,13 +25,14 @@ use Throwable;
  * group marked ['sitemap' => false] is not.
  */
 class SitemapService {
+    use LazyLogger;
+
     /** The sitemap protocol allows no more than this many URLs in one file. */
     private const int MAX_URLS = 50000;
 
     private const array CHANGEFREQ = ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never'];
 
     private Router $router;
-    private ?LoggerInterface $logger;
 
     public function __construct(Router $router, ?LoggerInterface $logger = null) {
         $this->router = $router;
@@ -234,12 +235,5 @@ class SitemapService {
 
     protected function stringOrNull(mixed $value): ?string {
         return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    /**
-     * Built on first use only - a sitemap with no broken provider logs nothing.
-     */
-    protected function logger(): LoggerInterface {
-        return $this->logger ??= Log::get();
     }
 }

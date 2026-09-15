@@ -14,6 +14,8 @@ use RuntimeException;
  * as model instances instead of bare arrays.
  */
 abstract class Repository {
+    use LazyConnection;
+
     protected string $table = '';
 
     /**
@@ -25,21 +27,12 @@ abstract class Repository {
 
     protected string $primaryKey = 'id';
 
-    private ?PDO $db = null;
-
     /**
      * The connection is only injected in tests; otherwise it is taken from
      * Connection on the first query.
      */
     public function __construct(?PDO $db = null) {
         $this->db = $db;
-    }
-
-    /**
-     * Database connection (lazy - a repository with no query connects nowhere).
-     */
-    protected function db(): PDO {
-        return $this->db ??= Connection::get();
     }
 
     /**
