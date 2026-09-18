@@ -271,16 +271,47 @@ final class ValidatorTest extends TestCase {
         Validator::make(['password' => 'a'], ['password' => 'required|min'])->passes();
     }
 
-    #[TestDox('max and between need their bounds too')]
+    #[TestDox('max and between need their bounds too, whatever the value measures')]
     public function testMaxAndBetweenWithoutTheirArgumentsThrow(): void {
-        foreach (['max', 'between', 'between:1'] as $rule) {
-            try {
-                Validator::make(['a' => 'x'], ['a' => $rule])->passes();
-                self::fail(sprintf('"%s" should have been refused.', $rule));
-            } catch (InvalidArgumentException $e) {
-                self::assertStringContainsString('needs an argument', $e->getMessage());
+        // Both sizes on purpose: the bounds used to be resolved across an
+        // `&&`, so `between:1` was refused only for a value that cleared the
+        // lower bound - 'x' measures 1 and did, '' measures 0 and did not,
+        // and got an ordinary "must be between 1 and 1" error instead.
+        foreach (['x', ''] as $value) {
+            foreach (['max', 'between', 'between:1'] as $rule) {
+                try {
+                    Validator::make(['a' => $value], ['a' => $rule])->passes();
+                    self::fail(sprintf('"%s" should have been refused for "%s".', $rule, $value));
+                } catch (InvalidArgumentException $e) {
+                    self::assertStringContainsString('needs an argument', $e->getMessage());
+                }
             }
         }
+    }
+
+    #[TestDox('a size rule whose bound is not a number is refused as well')]
+    public function testSizeRulesWithANonNumericBoundThrow(): void {
+        // The same silent pass as a missing bound: (float) 'eight' is 0, which
+        // every value clears, so the field looked validated while accepting a
+        // single character.
+        foreach (['min:eight', 'between:1,ten'] as $rule) {
+            try {
+                Validator::make(['password' => 'a'], ['password' => 'required|' . $rule])->passes();
+                self::fail(sprintf('"%s" should have been refused.', $rule));
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString('needs a number', $e->getMessage());
+            }
+        }
+    }
+
+    #[TestDox('numeric bounds, decimals included, still do their job')]
+    public function testValidSizeBoundsStillWork(): void {
+        self::assertTrue(Validator::make(['a' => 'abcdefgh'], ['a' => 'min:8'])->passes());
+        self::assertFalse(Validator::make(['a' => 'a'], ['a' => 'min:8'])->passes());
+        self::assertTrue(Validator::make(['a' => 'abc'], ['a' => 'between:1,10'])->passes());
+        self::assertFalse(Validator::make(['a' => 'abc'], ['a' => 'between:4,10'])->passes());
+        self::assertTrue(Validator::make(['a' => 'abc'], ['a' => 'min:2.5'])->passes());
+        self::assertFalse(Validator::make(['a' => '2'], ['a' => 'numeric|min:3'])->passes());
     }
 
     #[TestDox('a non-scalar is not coerced into matching an allowed value')]

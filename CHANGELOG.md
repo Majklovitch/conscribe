@@ -4,6 +4,26 @@ All notable changes to Conscribe PHP. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **A size rule's bound must now be a number, not merely present.** 2.1.0
+  refused `min`, `max` and `between` when the bound was missing, but a bound
+  that was there and not numeric still went through `(float)` and became `0` -
+  so `'password' => 'required|min:eight'` cleared every value, the same silent
+  pass the missing-bound check was written to stop. `max:abc`, cast the same
+  way, failed every value instead. Both are now refused with the bound quoted
+  back: `The "min" rule needs a number, not "eight", e.g. min:8.`
+- **`between` reports a missing upper bound whatever the value measures.** The
+  two bounds were resolved on either side of an `&&`, so a typo like
+  `between:5` was only refused for values that cleared the lower bound;
+  anything shorter got an ordinary validation error reading "must be between 5
+  and 5 characters", because the message falls back to the first bound when
+  the second is absent. Both bounds are resolved before the comparison now, so
+  the mistake in the rules surfaces on the first submission rather than on
+  whichever one happens to be long enough.
+
 ## 2.1.0 - 2026-09-18
 
 ### Added

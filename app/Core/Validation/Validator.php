@@ -205,14 +205,23 @@ final class Validator {
             'alpha' => is_string($value) && preg_match('/^[\pL]+$/u', $value) === 1,
             'alpha_num' => is_string($value) && preg_match('/^[\pL\pN]+$/u', $value) === 1,
             'alpha_dash' => is_string($value) && preg_match('/^[\pL\pN_-]+$/u', $value) === 1,
-            // Through argument(), not `?? 0`: `min` with no bound compared
-            // against zero, which every value clears, so `'password' =>
-            // 'required|min'` accepted a single character while looking as
-            // though it enforced a length.
-            'min' => $this->size($value) >= (float) $this->argument($rule, $args, 0),
-            'max' => $this->size($value) <= (float) $this->argument($rule, $args, 0),
-            'between' => $this->size($value) >= (float) $this->argument($rule, $args, 0)
-                && $this->size($value) <= (float) $this->argument($rule, $args, 1),
+            // Through bound(), not `(float) ($args[0] ?? 0)`: a bound that is
+            // missing - or present but not a number - cast to zero, which
+            // every value clears, so `'password' => 'required|min'` (and
+            // `min:eight`) accepted a single character while looking as though
+            // it enforced a length.
+            'min' => $this->size($value) >= $this->bound($rule, $args, 0),
+            'max' => $this->size($value) <= $this->bound($rule, $args, 0),
+            // Both bounds are resolved before the comparison rather than
+            // across an `&&`: short-circuiting meant `between:5` - a typo that
+            // dropped the upper bound - was refused only for values that
+            // cleared the lower one, and passed off the rest as an ordinary
+            // validation error reading "between 5 and 5".
+            'between' => $this->isWithin(
+                $this->size($value),
+                $this->bound($rule, $args, 0),
+                $this->bound($rule, $args, 1),
+            ),
             // A non-scalar cannot be one of a list of strings. Casting it
             // would make an array match an empty allowed value, which is a
             // silent pass - the one outcome a validator must never produce.
@@ -252,6 +261,36 @@ final class Validator {
                     default => $rule . ':value',
                 },
             ));
+    }
+
+    /**
+     * A size rule's bound, which has to be a number.
+     *
+     * `min:eight` is the same mistake as `min` with no argument at all: cast
+     * to a float it becomes 0, and a rule comparing against zero passes
+     * everything. Both are refused here rather than at the point of use, so
+     * neither can be hidden behind a `&&` that never gets that far.
+     *
+     * @param array<int, string> $args
+     */
+    private function bound(string $rule, array $args, int $position): float {
+        $bound = $this->argument($rule, $args, $position);
+
+        if (!is_numeric($bound)) {
+            throw new InvalidArgumentException(sprintf(
+                'The "%s" rule needs a number, not "%s", e.g. %s.',
+                $rule,
+                $bound,
+                $rule === 'between' ? 'between:1,10' : $rule . ':8',
+            ));
+        }
+
+        return (float) $bound;
+    }
+
+    /** Both bounds inclusive; separate so that neither can be short-circuited. */
+    private function isWithin(float $size, float $min, float $max): bool {
+        return $size >= $min && $size <= $max;
     }
 
     /**
