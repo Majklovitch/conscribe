@@ -6,6 +6,26 @@ All notable changes to Conscribe PHP. The format follows
 
 ## Unreleased
 
+### Changed
+
+- **Only a write starts a session now.** 2.1.0 stopped reads from starting one,
+  but left every other method calling `start()` outright, so the promise held
+  only for pages that read. `remove()`, `clear()`, `rotateToken()` and
+  `destroy()` delete things that cannot exist in a session that does not
+  exist, yet each wrote a session file and sent a cookie to find that out -
+  and because `Auth::logout()` calls three of them, plus `regenerate()`, every
+  hit on a logout route from a visitor who was never signed in (a crawler, a
+  prefetch, a repeated POST) created a session and then immediately cleared
+  it. Those four, `regenerate()` and `id()` now resume the session the visitor
+  already has and do nothing when there is none; `set()`, `flash()` and
+  `token()` - the three calls that genuinely store something - still start one.
+  `regenerate()` loses nothing by this: session fixation needs an ID that
+  already exists, `start()` sets `session.use_strict_mode`, under which PHP
+  refuses an uninitialised ID a visitor supplies, and a planted ID that is
+  real arrives with a cookie, which is exactly when it still runs. `id()`
+  returns `null` for a visitor with no session instead of minting one, which
+  is what its `?string` return type always promised.
+
 ### Fixed
 
 - **A size rule's bound must now be a number, not merely present.** 2.1.0

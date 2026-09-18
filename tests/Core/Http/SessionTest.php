@@ -60,14 +60,46 @@ final class SessionTest extends TestCase {
         self::assertSame(1, $session->starts);
     }
 
+    #[TestDox('deleting from a session that does not exist never starts one')]
+    public function testDeletionsDoNotStartASession(): void {
+        // Deleting has as little to do in a session that does not exist as
+        // reading does. A logout route hit by a crawler, a prefetch or a
+        // repeated POST would otherwise write a session file and send two
+        // Set-Cookie headers - one making the session, one clearing it.
+        $session = new CountingSession();
+
+        $session->remove('cart');
+        $session->clear();
+        $session->rotateToken();
+        $session->destroy();
+
+        // Nor does asking about the session rather than storing in it.
+        self::assertNull($session->id());
+        self::assertFalse($session->regenerate());
+
+        self::assertSame(0, $session->starts);
+    }
+
+    #[TestDox('deleting from a session the visitor does have still resumes it')]
+    public function testDeletionsResumeAnExistingSession(): void {
+        $_COOKIE['CONSCRIBEID'] = 'an-existing-session-id';
+        $session = new CountingSession();
+
+        $session->remove('cart');
+        $session->rotateToken();
+
+        self::assertSame(2, $session->starts);
+    }
+
     #[TestDox('writing still starts a session')]
     public function testWritesStillStartASession(): void {
         $session = new CountingSession();
 
         $session->set('cart', ['item']);
         $session->flash('status', 'Saved.');
+        $session->token();
 
-        self::assertSame(2, $session->starts);
+        self::assertSame(3, $session->starts);
     }
 
     #[TestDox('keepFlash() does not undo a flash made during this request')]

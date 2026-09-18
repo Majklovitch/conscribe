@@ -8,9 +8,12 @@ use App\Core\Config;
  * Owns the PHP session lifecycle: cookie parameters, flash messages,
  * old form input and the CSRF token.
  *
- * The session starts lazily - only on the first read or write. A visitor who
- * never touches the session therefore gets no cookie, and their page stays
- * cacheable on proxies and CDNs.
+ * The session starts lazily, and only where something is actually stored:
+ * set(), flash() and token(). Everything else - reading, deleting, clearing,
+ * destroying - resumes the session the visitor already has and does nothing
+ * when there is none. A visitor who never has anything written for them
+ * therefore gets no cookie, and their page stays cacheable on proxies and
+ * CDNs.
  */
 class Session {
     /** Keys owned by Session itself; they never show up in all(). */
@@ -128,22 +131,32 @@ class Session {
     }
 
     /**
-     * Starts the session in order to read from it - or does nothing, when
-     * there is no session to read.
+     * Resumes the session the visitor already has - and never creates one.
      *
-     * A read cannot find anything in a session that does not exist, and
-     * starting one to look writes a session file and sends a cookie. A page
-     * that merely checks for a flash message or old input would otherwise hand
-     * every anonymous visitor a session, which also makes the page uncacheable
-     * on a proxy or CDN - the opposite of what the lazy start promises. Writes
-     * still start the session; reads only resume one.
+     * Everything that cannot put a value into the session goes through here.
+     * A read finds nothing in a session that does not exist, and a deletion has
+     * nothing to delete from it, yet starting one to find that out writes a
+     * session file and sends a cookie: a page that merely checks for a flash
+     * message, or a logout route hit by a crawler that was never signed in,
+     * would hand an anonymous visitor a session and make the page uncacheable
+     * on a proxy or CDN - the opposite of what the lazy start promises.
+     *
+     * Only the three calls that genuinely store something - set(), flash() and
+     * token() - start a session outright.
      */
-    private function startForReading(): bool {
+    private function resume(): bool {
         return $this->exists() && $this->start();
     }
 
+    /**
+     * The current session's ID, or null when the visitor has no session.
+     *
+     * Asking what the ID is does not mint one - null is the honest answer,
+     * and it is what the return type has always promised. Code that wants a
+     * session to exist starts one by storing something in it.
+     */
     public function id(): ?string {
-        if (!$this->start()) {
+        if (!$this->resume()) {
             return null;
         }
 
@@ -155,9 +168,15 @@ class Session {
     /**
      * Swaps the session ID while keeping the data - defence against session
      * fixation. Worth calling manually after a login.
+     *
+     * There is nothing to swap when the visitor arrived without a session, so
+     * one is not started to do it: fixation needs an ID that already exists,
+     * and start() sets session.use_strict_mode, under which PHP refuses an
+     * uninitialised ID a visitor supplies and issues its own. A planted ID
+     * that is real comes with a cookie, which is exactly when this does run.
      */
     public function regenerate(bool $deleteOld = true): bool {
-        if (!$this->start() || headers_sent()) {
+        if (!$this->resume() || headers_sent()) {
             return false;
         }
 
@@ -171,7 +190,7 @@ class Session {
     }
 
     public function destroy(): void {
-        if (!$this->isStarted() && !$this->start()) {
+        if (!$this->resume()) {
             return;
         }
 
@@ -192,7 +211,7 @@ class Session {
     // --- Data ---------------------------------------------------------------
 
     public function get(string $key, mixed $default = null): mixed {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return $default;
         }
 
@@ -208,11 +227,11 @@ class Session {
     }
 
     public function has(string $key): bool {
-        return $this->startForReading() && isset($_SESSION[$key]);
+        return $this->resume() && isset($_SESSION[$key]);
     }
 
     public function remove(string $key): self {
-        if ($this->start()) {
+        if ($this->resume()) {
             unset($_SESSION[$key]);
         }
 
@@ -221,12 +240,11 @@ class Session {
 
     /**
      * Reads a value and removes it from the session in one go.
+     *
+     * No guard of its own: both halves resume rather than start, so with no
+     * session this returns the default and touches nothing.
      */
     public function pull(string $key, mixed $default = null): mixed {
-        if (!$this->exists()) {
-            return $default;
-        }
-
         $value = $this->get($key, $default);
         $this->remove($key);
 
@@ -239,7 +257,7 @@ class Session {
      * @return array<string, mixed>
      */
     public function all(): array {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return [];
         }
 
@@ -250,7 +268,7 @@ class Session {
      * Drops the application data, keeping the internal keys (flash, CSRF token).
      */
     public function clear(): self {
-        if (!$this->start()) {
+        if (!$this->resume()) {
             return $this;
         }
 
@@ -279,7 +297,7 @@ class Session {
      * flashing and reading within a single request works too.
      */
     public function getFlash(string $key, mixed $default = null): mixed {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return $default;
         }
 
@@ -289,7 +307,7 @@ class Session {
     }
 
     public function hasFlash(string $key): bool {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return false;
         }
 
@@ -301,7 +319,7 @@ class Session {
      * @return array<string, mixed>
      */
     public function allFlash(): array {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return [];
         }
 
@@ -320,7 +338,7 @@ class Session {
      * @param string[]|null $keys null = all of them
      */
     public function keepFlash(?array $keys = null): self {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return $this;
         }
 
@@ -407,7 +425,7 @@ class Session {
     }
 
     public function validateToken(?string $token): bool {
-        if (!$this->startForReading()) {
+        if (!$this->resume()) {
             return false;
         }
 
@@ -424,7 +442,7 @@ class Session {
      * Drops the current token; the next token() generates a new one.
      */
     public function rotateToken(): self {
-        if ($this->start()) {
+        if ($this->resume()) {
             unset($_SESSION[self::TOKEN_KEY]);
         }
 
