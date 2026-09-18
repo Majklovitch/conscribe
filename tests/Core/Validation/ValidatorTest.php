@@ -261,6 +261,28 @@ final class ValidatorTest extends TestCase {
         Validator::make(['a' => 'x'], ['a' => 'same'])->passes();
     }
 
+    #[TestDox('a size rule missing its bound is refused, not compared against zero')]
+    public function testSizeRulesWithoutTheirArgumentThrow(): void {
+        // `min` fell back to 0, which every value clears, so a typo that drops
+        // ':8' left the field looking validated while accepting one character.
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The "min" rule needs an argument, e.g. min:8.');
+
+        Validator::make(['password' => 'a'], ['password' => 'required|min'])->passes();
+    }
+
+    #[TestDox('max and between need their bounds too')]
+    public function testMaxAndBetweenWithoutTheirArgumentsThrow(): void {
+        foreach (['max', 'between', 'between:1'] as $rule) {
+            try {
+                Validator::make(['a' => 'x'], ['a' => $rule])->passes();
+                self::fail(sprintf('"%s" should have been refused.', $rule));
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString('needs an argument', $e->getMessage());
+            }
+        }
+    }
+
     #[TestDox('a non-scalar is not coerced into matching an allowed value')]
     public function testInRejectsNonScalars(): void {
         // Casting an array to string yields '', which would have matched an

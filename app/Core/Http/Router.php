@@ -142,11 +142,17 @@ class Router {
      *       require __DIR__ . '/routes/admin.php';
      *   });
      *
+     * Groups nest, and a nested one refines its parent rather than replacing
+     * it - through the same mergeOptions() a route's own options go through.
+     * A plain array_merge() here would overwrite the parent's 'middleware'
+     * wholesale, so an admin group inside a signed-in group would silently
+     * drop the authentication and leave its pages reachable by anyone.
+     *
      * @param callable(self): void $register
      */
     public function group(array $defaults, callable $register): void {
         $previous = $this->routeDefaults;
-        $this->routeDefaults = array_merge($previous, $defaults);
+        $this->routeDefaults = $this->mergeOptions($previous, $defaults);
 
         try {
             $register($this);

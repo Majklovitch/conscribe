@@ -40,14 +40,45 @@ final class Migrator {
     /**
      * Every migration file found, by name, in the order they must run.
      *
+     * The name is the filename, and it is the only thing the migrations table
+     * records - so two directories holding the same filename is refused rather
+     * than resolved. Keeping the last one found would run one file, log the
+     * shared name as applied, and leave the other one permanently invisible:
+     * `migrate:status` would report it done and the missing table would only
+     * turn up later as an SQL error.
+     *
      * @return array<string, string> name => absolute path
+     * @throws MigrationException when two paths hold the same filename
      */
     public function available(): array {
         $found = [];
+        $seen = [];
 
         foreach ($this->paths as $path) {
-            foreach (glob(rtrim($path, '/\\') . '/*.php') ?: [] as $file) {
-                $found[basename($file, '.php')] = $file;
+            $path = rtrim($path, '/\\');
+
+            // The same directory listed twice - two modules sharing one, a
+            // path spelled both absolutely and relatively - is not a clash of
+            // two migrations, so it is skipped rather than reported as one.
+            $key = realpath($path) ?: $path;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            foreach (glob($path . '/*.php') ?: [] as $file) {
+                $name = basename($file, '.php');
+
+                if (isset($found[$name])) {
+                    throw new MigrationException(sprintf(
+                        'Two migrations are both named "%s": %s and %s. A migration is identified by its filename alone, so rename one of them.',
+                        $name,
+                        $found[$name],
+                        $file,
+                    ));
+                }
+
+                $found[$name] = $file;
             }
         }
 

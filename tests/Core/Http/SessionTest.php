@@ -8,6 +8,7 @@ use App\Core\Http\Session;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestDox;
 use PHPUnit\Framework\TestCase;
+use Tests\Support\ArraySession;
 
 /** Counts how often something tried to start the session. */
 final class CountingSession extends Session {
@@ -24,6 +25,7 @@ final class CountingSession extends Session {
 final class SessionTest extends TestCase {
     protected function tearDown(): void {
         unset($_COOKIE['CONSCRIBEID']);
+        $_SESSION = [];
     }
 
     #[TestDox('reading from a session that does not exist never starts one')]
@@ -66,6 +68,33 @@ final class SessionTest extends TestCase {
         $session->flash('status', 'Saved.');
 
         self::assertSame(2, $session->starts);
+    }
+
+    #[TestDox('keepFlash() does not undo a flash made during this request')]
+    public function testKeepFlashDoesNotOverwriteTheNewQueue(): void {
+        // The previous request's message, already aged into 'old'.
+        $_SESSION = ['_flash' => ['old' => ['status' => 'saved', 'note' => 'kept'], 'new' => []]];
+
+        $session = new ArraySession();
+        $session->flash('status', 'updated');
+        $session->keepFlash();
+
+        // Written as `$keep + $queues['new']`, the union operator kept the
+        // aged value and the message flashed a line earlier was lost.
+        self::assertSame('updated', $_SESSION['_flash']['new']['status']);
+
+        // A key only the old queue holds is still carried forward - which is
+        // what keepFlash() is for.
+        self::assertSame('kept', $_SESSION['_flash']['new']['note']);
+    }
+
+    #[TestDox('keepFlash() can be limited to named keys')]
+    public function testKeepFlashWithNamedKeys(): void {
+        $_SESSION = ['_flash' => ['old' => ['status' => 'saved', 'note' => 'dropped'], 'new' => []]];
+
+        (new ArraySession())->keepFlash(['status']);
+
+        self::assertSame(['status' => 'saved'], $_SESSION['_flash']['new']);
     }
 
     #[TestDox('passwords and the CSRF token never reach old input, nested ones included')]

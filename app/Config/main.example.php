@@ -15,7 +15,6 @@ return [
         //
         //   'trusted_proxies' => ['10.0.0.0/8', '2400:cb00::/32'],
         'trusted_proxies' => [],
-                                               // and for the <loc> entries in /sitemap.xml
     ],
     'security' => [
         // Content-Security-Policy. Empty = no CSP header at all, which is how

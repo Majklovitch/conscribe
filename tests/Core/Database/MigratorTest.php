@@ -237,6 +237,42 @@ this is not php;
         self::assertTrue($this->tableExists(MigrationRepository::TABLE));
     }
 
+    #[TestDox('two paths holding the same filename are refused, not silently merged')]
+    public function testDuplicateMigrationNamesAcrossPathsThrow(): void {
+        $second = sys_get_temp_dir() . '/conscribe-migrations-' . bin2hex(random_bytes(6));
+        mkdir($second, 0o775, true);
+
+        try {
+            $this->writeMigration('2026_01_01_000000_create_settings', 'settings_app');
+            file_put_contents($second . '/2026_01_01_000000_create_settings.php', file_get_contents(
+                $this->path . '/2026_01_01_000000_create_settings.php',
+            ));
+
+            // A migration is identified by its filename alone, so keeping the
+            // last one found would run one file, log the shared name as
+            // applied, and leave the other permanently invisible - status
+            // would call it done while its table was never created.
+            $this->expectException(MigrationException::class);
+            $this->expectExceptionMessage('Two migrations are both named "2026_01_01_000000_create_settings"');
+
+            (new Migrator($this->db, [$this->path, $second]))->available();
+        } finally {
+            foreach (glob($second . '/*.php') ?: [] as $file) {
+                unlink($file);
+            }
+            @rmdir($second);
+        }
+    }
+
+    #[TestDox('the same directory listed twice is not a duplicate')]
+    public function testTheSameDirectoryTwiceIsNotAClash(): void {
+        $this->writeMigration('2026_01_01_000000_create_a', 'a');
+
+        $migrator = new Migrator($this->db, [$this->path, $this->path . '/']);
+
+        self::assertSame(['2026_01_01_000000_create_a'], array_keys($migrator->available()));
+    }
+
     public function testEachCallbackReportsProgress(): void {
         $this->writeMigration('2026_01_01_000000_create_a', 'a');
 

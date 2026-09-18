@@ -205,10 +205,14 @@ final class Validator {
             'alpha' => is_string($value) && preg_match('/^[\pL]+$/u', $value) === 1,
             'alpha_num' => is_string($value) && preg_match('/^[\pL\pN]+$/u', $value) === 1,
             'alpha_dash' => is_string($value) && preg_match('/^[\pL\pN_-]+$/u', $value) === 1,
-            'min' => $this->size($value) >= (float) ($args[0] ?? 0),
-            'max' => $this->size($value) <= (float) ($args[0] ?? 0),
-            'between' => $this->size($value) >= (float) ($args[0] ?? 0)
-                && $this->size($value) <= (float) ($args[1] ?? 0),
+            // Through argument(), not `?? 0`: `min` with no bound compared
+            // against zero, which every value clears, so `'password' =>
+            // 'required|min'` accepted a single character while looking as
+            // though it enforced a length.
+            'min' => $this->size($value) >= (float) $this->argument($rule, $args, 0),
+            'max' => $this->size($value) <= (float) $this->argument($rule, $args, 0),
+            'between' => $this->size($value) >= (float) $this->argument($rule, $args, 0)
+                && $this->size($value) <= (float) $this->argument($rule, $args, 1),
             // A non-scalar cannot be one of a list of strings. Casting it
             // would make an array match an empty allowed value, which is a
             // silent pass - the one outcome a validator must never produce.
@@ -243,6 +247,8 @@ final class Validator {
                 match ($rule) {
                     'regex' => 'regex:/^[a-z]+$/',
                     'same', 'different' => $rule . ':other_field',
+                    'min', 'max' => $rule . ':8',
+                    'between' => 'between:1,10',
                     default => $rule . ':value',
                 },
             ));

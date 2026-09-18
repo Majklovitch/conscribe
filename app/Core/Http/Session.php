@@ -331,7 +331,11 @@ class Session {
 
         $_SESSION[self::FLASH_KEY] = [
             'old' => $queues['old'],
-            'new' => $keep + $queues['new'],
+            // The new queue wins on a key both hold: keeping a message alive
+            // for one more request must not undo a flash() made during this
+            // one. Written the other way round, flashing 'updated' over an
+            // aged 'saved' and then keeping it would send 'saved' on again.
+            'new' => $queues['new'] + $keep,
         ];
 
         return $this;

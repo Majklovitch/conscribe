@@ -19,6 +19,28 @@ All notable changes to Conscribe PHP. The format follows
 - `docs/NAVOD.md`, a Czech how-to for adding pages, forms, tables, APIs,
   middleware, commands and modules.
 
+### Fixed
+
+- **A nested `group()` no longer drops its parent's middleware.** The group
+  defaults were merged with `array_merge()`, which replaces `middleware`
+  wholesale, so an admin group inside a signed-in group ran only its own entry
+  and left its pages reachable by anyone. Nested groups now go through the same
+  merge a route's own options do: the parent's entries run first, then the
+  child's.
+- **`min`, `max` and `between` are refused when their bound is missing**, the
+  way `regex`, `same` and `different` already were. `min` compared against `0`,
+  which every value clears, so a typo that dropped `:8` left the field looking
+  validated while accepting a single character.
+- **Two migrations with the same filename in different directories are
+  refused.** A migration is identified by its filename alone, so the later path
+  silently replaced the earlier one: one file ran, the shared name was logged as
+  applied, and the other became permanently invisible - `migrate:status` called
+  it done while its table had never been created. Listing the same directory
+  twice is still not a clash.
+- **`keepFlash()` no longer undoes a `flash()` made during the same request.**
+  The queues were combined the other way round, so extending an aged message by
+  one request overwrote the value flashed a line earlier.
+
 ### Changed
 
 - `LazyConnection` provides `run()`, the typed-binding query helper that was

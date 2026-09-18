@@ -257,6 +257,35 @@ final class MiddlewareTest extends TestCase {
         );
     }
 
+    #[TestDox('a nested group appends to its parent rather than replacing it')]
+    public function testNestedGroupMiddlewareAppendsToTheParent(): void {
+        $router = new Router(new FakeSession());
+        $router->group(['middleware' => [new Tagger('outer')]], static function (Router $router): void {
+            $router->group(['middleware' => [new Tagger('inner')]], static function (Router $router): void {
+                $router->get('admin/users', static fn (): Response => Response::json([]));
+            });
+
+            $router->get('account', static fn (): Response => Response::json([]));
+        });
+
+        $router->handle(RequestFactory::make('GET', 'admin/users'));
+
+        // array_merge() on the group defaults would overwrite 'middleware'
+        // wholesale, so the outer group's authentication would never run and
+        // the page behind it would be reachable by anyone.
+        self::assertSame(
+            ['in:outer', 'in:inner', 'out:inner', 'out:outer'],
+            Tagger::$log,
+        );
+
+        Tagger::$log = [];
+        $router->handle(RequestFactory::make('GET', 'account'));
+
+        // The nested group's entry is confined to it; a sibling route
+        // registered after it still sees only the parent's.
+        self::assertSame(['in:outer', 'out:outer'], Tagger::$log);
+    }
+
     #[TestDox('global middleware runs outside the route middleware')]
     public function testGlobalRunsOutsideRoute(): void {
         $router = new Router(new FakeSession());
