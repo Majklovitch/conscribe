@@ -1,6 +1,6 @@
 # Conscribe PHP – praktický návod „jak přidat / jak udělat“
 
-Kuchařka k verzi **2.0.0**. Každá kapitola je samostatný recept: *kam co dát, jak to vypadá, na co si dát pozor*.
+Kuchařka k verzi **2.1.0**. Každá kapitola je samostatný recept: *kam co dát, jak to vypadá, na co si dát pozor*.
 Podrobný popis API je v [README.md](../README.md), tady jde o postupy.
 
 ## Obsah

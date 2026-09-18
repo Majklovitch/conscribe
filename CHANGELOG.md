@@ -4,7 +4,7 @@ All notable changes to Conscribe PHP. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 2.1.0 - 2026-09-18
 
 ### Added
 
@@ -43,10 +43,34 @@ All notable changes to Conscribe PHP. The format follows
 
 ### Changed
 
+- **Reading from the session no longer starts one.** The lazy start promises
+  that a visitor who never touches the session gets no cookie and the page
+  stays cacheable, but "touch" included reading: `flash()`, `old()`, `errors()`
+  and any `$session->get()` in a template wrote a session file and sent a
+  cookie to an anonymous visitor just to find it empty. `get`, `has`, `pull`,
+  `all`, `getFlash`, `hasFlash`, `allFlash`, `keepFlash` and `old` now return
+  their default when there is neither a running session nor a session cookie,
+  and `validateToken()` follows the same rule - a POST with no session cannot
+  carry a matching token. Writes (`set`, `flash`, `token`) still start one, so
+  a page stays session-less only while nothing on it writes; a form still needs
+  `csrf_field()`, which creates a session to hold the token.
+- **A cached image variant is served without re-validating its source.** Every
+  `image()` call used to `realpath()` the source and the root, then `is_file()`,
+  `is_readable()` and `getimagesize()` - which opens the file and reads its
+  header - before it even looked at the cache. All of that answers whether a
+  file may be *converted*, and a variant only exists because its source once
+  passed, so `get()` now checks freshness first and validates only when it has
+  to generate. `normalizeRelativePath()` still refuses `..` and NUL before
+  either path, and the source root's `realpath()` is computed once per instance.
+  Measured on one machine, medians of five runs with opcache on: `image()`
+  364 us to 100 us, `GET /test` (two images) 772 us to 465 us.
 - `LazyConnection` provides `run()`, the typed-binding query helper that was
   `Repository::run()`, and `ApiTokens` and `LoginThrottle` use it. Rows it
   returns are fetched by column name for named placeholders too, not only
   positional ones.
+- `LazyLogger` replaces the identical `logger()` helpers in `ErrorPage`,
+  `SitemapService` and `TracyMonologAdapter`, the way `LazyConnection` replaces
+  the `db()` ones. Constructors keep their signatures.
 
 ## 2.0.0 - 2026-09-13
 

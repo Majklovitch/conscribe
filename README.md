@@ -2,7 +2,7 @@
 
 Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
 
-**Version 2.0.0** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
+**Version 2.1.0** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
 
 May work on 8.2. Older versions I didn't test cause I don't want to.
 
