@@ -5,8 +5,6 @@ namespace App\Core\Template;
 use Throwable;
 
 class View {
-    private const PATH_PATTERN = '#^[A-Za-z0-9_\-/]+$#';
-
     public static function exists(string $viewPath): bool {
         return self::resolve($viewPath) !== null;
     }
@@ -35,31 +33,20 @@ class View {
             . self::capture(self::layoutFile('footer'), $data);
     }
 
-    private static function viewsDir(): string {
-        return dirname(__DIR__, 2) . '/Views';
-    }
-
     /**
-     * Turns a template name into an absolute path, or null when it does not
-     * exist or contains disallowed characters (path traversal protection).
+     * Turns a template name ('orders/show' or 'shop::orders/show') into an
+     * absolute path, or null when it does not exist or contains disallowed
+     * characters (path traversal protection). See ViewPaths.
      */
     private static function resolve(string $viewPath): ?string {
-        $viewPath = trim($viewPath, '/');
-
-        if ($viewPath === '' || str_contains($viewPath, '..') || !preg_match(self::PATH_PATTERN, $viewPath)) {
-            return null;
-        }
-
-        $file = self::viewsDir() . '/' . $viewPath . '.php';
-
-        return is_file($file) ? $file : null;
+        return ViewPaths::resolve($viewPath);
     }
 
     /**
      * @throws ViewNotFoundException
      */
     private static function layoutFile(string $name): string {
-        $file = self::viewsDir() . '/layout/' . $name . '.php';
+        $file = ViewPaths::coreDir() . '/layout/' . $name . '.php';
         if (!is_file($file)) {
             throw new ViewNotFoundException("Layout '{$name}' was not found.");
         }

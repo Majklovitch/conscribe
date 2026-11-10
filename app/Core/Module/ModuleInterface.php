@@ -48,4 +48,13 @@ interface ModuleInterface {
      * copying files out of it.
      */
     public function migrations(): ?string;
+
+    /**
+     * Absolute path to the module's templates (Views/), or null.
+     *
+     * They are rendered under the module's lower-cased name as namespace -
+     * View::render('shop::orders/show') - and component('shop::price') reads
+     * Views/components/. See App\Core\Template\ViewPaths.
+     */
+    public function views(): ?string;
 }

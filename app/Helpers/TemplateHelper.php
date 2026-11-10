@@ -32,12 +32,10 @@ function truncate(string $text, int $length = 100, string $append = '...'): stri
     return mb_substr($text, 0, $length) . $append;
 }
 function component(string $name, array $data = []): void {
-    if (str_contains($name, '..')) {
-        return;
-    }
-
-    $file = dirname(__DIR__) . "/Views/components/$name.php";
-    if (is_file($file)) {
+    // 'price' is app/Views/components/price.php, 'shop::price' the Shop
+    // module's Views/components/price.php. ViewPaths refuses traversal.
+    $file = \App\Core\Template\ViewPaths::resolve($name, '.php', 'components');
+    if ($file !== null) {
         extract($data, EXTR_SKIP);
         include $file;
     }

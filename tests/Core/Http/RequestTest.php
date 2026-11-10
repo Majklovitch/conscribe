@@ -88,4 +88,33 @@ final class RequestTest extends TestCase {
     public function testOtherContentTypesAreNotParsedAsForms(): void {
         self::assertNull(Request::parseUrlencoded('text/plain', 'qty=2'));
     }
+
+    // -----------------------------------------------------------------
+    // Attributes
+    // -----------------------------------------------------------------
+
+    #[TestDox('withAttribute() returns a copy and leaves the original untouched')]
+    public function testWithAttributeIsImmutable(): void {
+        $request = RequestFactory::make('GET', '/');
+        $tagged = $request->withAttribute('client', ['id' => 7]);
+
+        self::assertNotSame($request, $tagged);
+        self::assertSame(['id' => 7], $tagged->getAttribute('client'));
+        self::assertNull($request->getAttribute('client'));
+    }
+
+    #[TestDox('a missing attribute yields the default, a stored null does not')]
+    public function testAttributeDefault(): void {
+        $request = RequestFactory::make('GET', '/');
+
+        self::assertSame('fallback', $request->getAttribute('missing', 'fallback'));
+        self::assertNull($request->withAttribute('cors', null)->getAttribute('cors', 'fallback'));
+    }
+
+    #[TestDox('attributes survive withPath()')]
+    public function testAttributesSurviveOtherCopies(): void {
+        $request = RequestFactory::make('GET', '/cs/page')->withAttribute('lang', 'cs');
+
+        self::assertSame('cs', $request->withPath('page')->getAttribute('lang'));
+    }
 }

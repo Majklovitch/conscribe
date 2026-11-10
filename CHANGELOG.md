@@ -4,10 +4,55 @@ All notable changes to Conscribe PHP. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 2.1.1 - 2026-11-10
+
+### Added
+
+- **`main.prod.php` beside `main.php`.** `Config` now reads
+  `app/Config/main.prod.php` when production is wanted and `main.php`
+  otherwise, so one checkout can hold both configs. `APP_ENV=production` or
+  `APP_ENV=development`/`local` decides; without it, a web request picks
+  production unless the host is local (`localhost`, an IP, `*.local`,
+  `*.test`), and the console always picks `main.php`, so a cron on a
+  production server must set `APP_ENV=production`. Each file falls back to the
+  other when it is missing, so a site with only `main.php` runs as before.
+  `main.prod.php` is in `.gitignore`.
+- **Request attributes.** `Request::withAttribute()` returns a copy carrying a
+  named value and `getAttribute()` reads it back, so a middleware can hand the
+  controller what it worked out - an authenticated API client, say - by
+  passing the copy to `$next()`. The request itself stays immutable.
+- **Module templates.** A module's `Views/` folder is rendered under its
+  lower-cased name: `View::render('shop::orders/show')` reads
+  `app/Modules/Shop/Views/orders/show.php`, and `component('shop::price')`
+  its `Views/components/price.php`. Names without `::` resolve from
+  `app/Views/` exactly as before. Each namespace is a list of folders, so
+  `ViewPaths::register('shop', $dir, prepend: true)` overrides a module's
+  templates file by file without touching the module. The traversal checks
+  `View` had now live in `ViewPaths` and cover the namespace too.
+- **`Response::redirectExternal()`** for a trusted off-site target such as a
+  payment gateway's hosted page. It accepts only an `https://` URL with a host
+  and answers 303 by default; `redirect()` keeps refusing other origins.
+- **`conscribe.timezone`.** When set, it becomes PHP's default time zone for
+  the web and the console alike, so a cron and FPM running under different
+  php.ini files no longer write two clocks into the same columns. An unknown
+  name falls back to UTC with a line in the PHP log. Unset, php.ini decides
+  as before.
+- **A config overlay.** `Config::overlay(['shop.name' => 'Shop'])` lays values
+  over the file config by dot key, for settings an application keeps in its
+  database; `get()` sees the result, while `Config::file()` and
+  `Config::fileValue()` read the file alone.
+  `Config::set()` clears the overlay.
+- The container holds the configured `ErrorPage`, so a controller or
+  middleware that asks for one gets the application's page rather than an
+  autowired default.
 
 ### Changed
 
+- **`ModuleInterface` has a `views()` method.** A module extending
+  `App\Core\Module\Module` gets it for free; a class implementing the
+  interface directly has to add it (return `null` for no templates).
+- `component()` resolves through `ViewPaths`, so a component name is held to
+  the same characters as a view name - letters, digits, `_`, `-` and `/`.
 - **Only a write starts a session now.** 2.1.0 stopped reads from starting one,
   but left every other method calling `start()` outright, so the promise held
   only for pages that read. `remove()`, `clear()`, `rotateToken()` and
@@ -28,6 +73,10 @@ All notable changes to Conscribe PHP. The format follows
 
 ### Fixed
 
+- **An expired CSRF token reaches the browser as 419 under Apache.** Apache
+  does not know 419 and turned `http_response_code(419)` into a 500, so a
+  stale form looked like a server error. `Response::send()` now writes the
+  status line `419 Page Expired` explicitly.
 - **A size rule's bound must now be a number, not merely present.** 2.1.0
   refused `min`, `max` and `between` when the bound was missing, but a bound
   that was there and not numeric still went through `(float)` and became `0` -

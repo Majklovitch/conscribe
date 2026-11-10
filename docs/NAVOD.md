@@ -1,6 +1,6 @@
 # Conscribe PHP – praktický návod „jak přidat / jak udělat“
 
-Kuchařka k verzi **2.1.0**. Každá kapitola je samostatný recept: *kam co dát, jak to vypadá, na co si dát pozor*.
+Kuchařka k verzi **2.1.1**. Každá kapitola je samostatný recept: *kam co dát, jak to vypadá, na co si dát pozor*.
 Podrobný popis API je v [README.md](../README.md), tady jde o postupy.
 
 ## Obsah
@@ -84,6 +84,8 @@ php tty migrate
 ```
 
 > ⚠️ `main.php` je v `.gitignore`. Nový konfigurační klíč přidávejte **i do `main.example.php`**, jinak ho ostatní nebudou mít.
+
+Produkční konfigurace může ležet vedle jako `app/Config/main.prod.php` (také v `.gitignore`). Vybírá ji `APP_ENV=production`, `APP_ENV=development`/`local` vybírá `main.php`. Bez `APP_ENV` web použije `main.prod.php`, pokud host není lokální (`localhost`, IP, `*.local`, `*.test`); konzole vždy `main.php`, takže produkční cron musí nastavit `APP_ENV=production`. Když zvolený soubor chybí, použije se druhý.
 
 ---
 
@@ -725,6 +727,7 @@ app/Modules/Newsletter/
 ├── Module.php              # povinné – třída Modules\Newsletter\Module
 ├── helpers.php             # volitelné – globální funkce, načtou se samy
 ├── migrations/             # volitelné – spustí je `php tty migrate`
+├── Views/                  # volitelné – šablony modulu, `newsletter::…`
 ├── Controllers/
 ├── Commands/
 ├── Middleware/
@@ -756,7 +759,9 @@ final class Module extends BaseModule {
 
 Zapnutí: přidejte `'Newsletter'` do `'modules' => [...]` v `app/Config/main.php`. **Když modul v seznamu chybí, je tiše vypnutý** (routy, příkazy i migrace). Namespace `Modules\` je v composer autoloadu, nic dalšího netřeba.
 
-Šablony modulu: `View` hledá v `app/Views/`, takže je dejte tam (např. `app/Views/newsletter/…`), nebo modul vracejte `json()`/`redirect()`.
+Šablony modulu dejte do jeho `Views/` a volejte je s prefixem – malými písmeny název modulu a `::`: `$this->render('newsletter::form')` vykreslí `app/Modules/Newsletter/Views/form.php`, `component('newsletter::signup')` čte `Views/components/signup.php`. Layout (hlavička, patička) je vždy ten z `app/Views/layout/`. Bez prefixu se hledá v `app/Views/` jako dřív.
+
+Přepsání šablony modulu bez zásahu do modulu: `ViewPaths::register('newsletter', $slozka, prepend: true)` – co v té složce je, má přednost, zbytek se bere z modulu.
 
 ---
 

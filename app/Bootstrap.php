@@ -48,7 +48,7 @@ final class Bootstrap {
      * about whether this was 1.3.9 or 1.4.0. README and CHANGELOG repeat it
      * for readers; VersionTest fails the suite when either disagrees.
      */
-    public const VERSION = '2.1.0';
+    public const VERSION = '2.1.1';
 
     private bool $isDevelopment;
     private ErrorPage $errorPage;
@@ -151,6 +151,37 @@ final class Bootstrap {
         ini_set('display_errors', $this->isDevelopment ? '1' : '0');
         ini_set('display_startup_errors', $this->isDevelopment ? '1' : '0');
         ini_set('log_errors', '1');
+
+        $zone = self::timezone();
+        if ($zone !== null) {
+            date_default_timezone_set($zone);
+        }
+    }
+
+    /**
+     * The application's time zone from 'conscribe.timezone', or null to keep
+     * whatever date.timezone php.ini sets.
+     *
+     * Setting it makes the web and the console agree, so the timestamps PHP
+     * writes do not depend on the php.ini of the moment - a cron under one ini
+     * and FPM under another would otherwise write two clocks into the same
+     * columns. The database must agree for columns that default to
+     * CURRENT_TIMESTAMP, so run MySQL/MariaDB in the same zone. An unknown
+     * name falls back to UTC and says so in the PHP log.
+     */
+    public static function timezone(): ?string {
+        $zone = Config::get('conscribe.timezone');
+        if ($zone === null || $zone === '') {
+            return null;
+        }
+
+        if (is_string($zone) && in_array($zone, \DateTimeZone::listIdentifiers(\DateTimeZone::ALL_WITH_BC), true)) {
+            return $zone;
+        }
+
+        error_log(sprintf("conscribe.timezone '%s' is not a known time zone; using UTC.", is_scalar($zone) ? (string) $zone : get_debug_type($zone)));
+
+        return 'UTC';
     }
 
     private function bootErrorHandling(): void {
@@ -241,6 +272,9 @@ final class Bootstrap {
         }
 
         $container->instance(Container::class, $container);
+        // The configured error page, so a controller or middleware rendering
+        // an error asks for this one rather than autowiring a bare default.
+        $container->instance(ErrorPage::class, $this->errorPage);
         // Bound under the interface as well, so a command or a service can ask
         // for the standard type rather than this implementation.
         $container->instance(ContainerInterface::class, $container);

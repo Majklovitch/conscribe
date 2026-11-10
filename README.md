@@ -2,7 +2,7 @@
 
 Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
 
-**Version 2.1.0** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
+**Version 2.1.1** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
 
 May work on 8.2. Older versions I didn't test cause I don't want to.
 
@@ -202,6 +202,8 @@ composer install
 ## Configuration
 
 All configuration lives in `app/Config/main.php`, which is git-ignored. Copy it from `app/Config/main.example.php`.
+
+A production config can sit beside it as `app/Config/main.prod.php` (also git-ignored). `APP_ENV=production` selects it, and `APP_ENV=development` or `local` selects `main.php`. Without `APP_ENV`, a web request uses `main.prod.php` unless the host is local (`localhost`, an IP, `*.local`, `*.test`). The console always uses `main.php`, so a production cron must set `APP_ENV=production`. When the chosen file is missing, the other one is used.
 
 ```php
 return [
@@ -945,6 +947,7 @@ return $this->render('home', ['pageTitle' => 'Domovská stránka']);
 - Data is injected with `extract($data, EXTR_SKIP)`, so template variables can never clobber the renderer's own state.
 - View paths are restricted to `[A-Za-z0-9_-/]` and reject `..`, closing off path traversal.
 - A missing view throws `ViewNotFoundException`, which the router converts into a clean 404.
+- A module's templates live in its own `Views/` folder and are named with the module's lower-cased name as a prefix: `$this->render('newsletter::form')` renders `app/Modules/Newsletter/Views/form.php`, and `component('newsletter::signup')` reads its `Views/components/signup.php`. `ViewPaths::register('newsletter', $dir, prepend: true)` puts an override folder in front of the module's; a file missing from it still comes from the module. The layout is always the application's own.
 - Output buffering is unwound on exceptions, so a template that throws halfway never leaks half a page.
 
 ---
@@ -1368,7 +1371,7 @@ class Module extends BaseModule
 }
 ```
 
-The base class supplies sensible defaults, so a module only overrides what it needs. A `helpers.php` next to `Module.php` is `require_once`d automatically, letting the module publish its own global template functions.
+The base class supplies sensible defaults, so a module only overrides what it needs. A `helpers.php` next to `Module.php` is `require_once`d automatically, letting the module publish its own global template functions. A `Views/` folder next to it holds the module's templates, rendered as `newsletter::…` (see [Views & Layouts](#views--layouts)).
 
 The `modules` key in the config acts as a whitelist; remove the key to enable everything found. Directories are loaded in sorted order, and anything that is not a `ModuleInterface` implementation is skipped rather than fatal.
 
@@ -1457,7 +1460,8 @@ Deployment checklist:
 - Point the document root at `public/`.
 - Make `storage/logs/` and `public/media/cache/` writable by the web server.
 - Enable HTTPS and uncomment the HTTPS redirect block in `public/.htaccess`.
-- Confirm `app/Config/main.php` is not in version control — it is git-ignored by default.
+- Confirm `app/Config/main.php` (and `main.prod.php`, if you use one) is not in version control — both are git-ignored by default.
+- If the server keeps its config as `main.prod.php`, set `APP_ENV=production` for cron jobs and `php tty` commands.
 - Review `log.level` and `log.max_files` for the traffic you expect.
 
 ---
