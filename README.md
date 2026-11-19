@@ -1,6 +1,6 @@
 # Conscribe PHP
 
-Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
+Conscribe is a small PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
 
 **Version 2.1.1** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
 
@@ -10,18 +10,8 @@ May work on 8.2. Older versions I didn't test cause I don't want to.
 
 ---
 
-What I want to do in future:
-
-- [ ] Rewrite readme with HUMAN sentences and not the code infrastructure
-- [ ] Rewrite some stuff in code that are unnecessarily complicated and hard to read
-- [ ] Redo the welcome page to be more human and not AI generated
-- [ ] Add new features that will make the framework better (dunno what yet)
-- [ ] Add a 3rd party ORM or make my own (doctrine or mine)
-- [x] Add a dependency injection container (php-di or something else) - done in 2.0.0, a small PSR-11 one of our own
-- [ ] Create new modules??
-- [ ] Refactor Configs to php objects instead of arrays (maybe) - but make them in their own files and not in one big file
-- [ ] Maybe create an .ai folder for better AI integration?
-- [ ] Redo docker compose
+What I want to do in future: see the **[roadmap](docs/ROADMAP.md)** – every planned task, the
+versioning rules and what is already done (clickable checklist: [docs/tasks.html](docs/tasks.html)).
 
 ---
 
