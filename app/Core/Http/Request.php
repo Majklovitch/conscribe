@@ -16,6 +16,13 @@ class Request {
     private ?string $rawBody;
     private bool $hasInvalidJson;
 
+    /**
+     * Values a middleware hands down to the controller, see withAttribute().
+     *
+     * @var array<string, mixed>
+     */
+    private array $attributes = [];
+
     public function __construct(
         array $queryParams = [],
         array $bodyParams = [],
@@ -123,6 +130,23 @@ class Request {
         $clone->path = trim($path, '/');
 
         return $clone;
+    }
+
+    /**
+     * A copy of the request carrying a named value - e.g. the API client a
+     * middleware authenticated, read back by the controller. The request
+     * itself stays immutable, so a middleware passes the copy to $next().
+     */
+    public function withAttribute(string $key, mixed $value): static {
+        $clone = clone $this;
+        $clone->attributes[$key] = $value;
+
+        return $clone;
+    }
+
+    /** A value set by withAttribute(), or $default when there is none. */
+    public function getAttribute(string $key, mixed $default = null): mixed {
+        return array_key_exists($key, $this->attributes) ? $this->attributes[$key] : $default;
     }
 
     /**

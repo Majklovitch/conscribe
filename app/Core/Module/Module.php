@@ -35,6 +35,12 @@ abstract class Module implements ModuleInterface {
         return is_dir($directory) ? $directory : null;
     }
 
+    public function views(): ?string {
+        $directory = $this->path() . '/Views';
+
+        return is_dir($directory) ? $directory : null;
+    }
+
     public function helpers(): ?string {
         $file = $this->path() . '/helpers.php';
 

@@ -15,6 +15,11 @@ return [
         //
         //   'trusted_proxies' => ['10.0.0.0/8', '2400:cb00::/32'],
         'trusted_proxies' => [],
+
+        // Time zone for every date PHP writes, web and console alike - e.g.
+        // 'UTC' or 'Europe/Prague'. null keeps php.ini's date.timezone. Run
+        // the database in the same zone (CURRENT_TIMESTAMP columns).
+        'timezone' => null,
     ],
     'security' => [
         // Content-Security-Policy. Empty = no CSP header at all, which is how

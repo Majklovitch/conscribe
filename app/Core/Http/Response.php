@@ -211,6 +211,26 @@ class Response {
     }
 
     /**
+     * Redirects to a trusted external https URL, such as a payment gateway's
+     * hosted page. Only for targets the application itself produced; never
+     * pass user input here, use redirect() for everything else.
+     *
+     * @throws InvalidArgumentException when the URL is not https with a host
+     */
+    public static function redirectExternal(string $url, int $statusCode = 303, array $headers = []): self {
+        $url = trim(str_replace(["\r", "\n", "\0", "\t"], '', $url));
+
+        $host = preg_match('#^https://#i', $url) ? parse_url($url, PHP_URL_HOST) : null;
+
+        if (!is_string($host) || $host === '') {
+            throw new InvalidArgumentException("Refusing to redirect to non-https external URL '{$url}'.");
+        }
+
+        $headers['Location'] = $url;
+        return new self('', $statusCode, $headers);
+    }
+
+    /**
      * Validates and normalizes the redirect target.
      *
      * @throws InvalidArgumentException
@@ -276,6 +296,13 @@ class Response {
         }
 
         http_response_code($this->statusCode);
+
+        // Apache knows no 419 and turns http_response_code(419) into a 500,
+        // so an expired CSRF token never reached the browser as 419. An
+        // explicit status line is passed through unchanged.
+        if ($this->statusCode === 419) {
+            header(($_SERVER['SERVER_PROTOCOL'] ?? 'HTTP/1.1') . ' 419 Page Expired', true, 419);
+        }
 
         foreach ($this->headers as $name => $values) {
             $first = true;

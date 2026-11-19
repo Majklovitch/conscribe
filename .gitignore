@@ -1,5 +1,6 @@
 /vendor/
 /app/Config/main.php
+/app/Config/main.prod.php
 /.idea/
 ABOUT.md
 /.claude/
