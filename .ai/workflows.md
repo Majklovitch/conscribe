@@ -1,175 +1,85 @@
-# ConscribePHP Workflows & Coding Standards
+# Workflows and conventions
 
-This document establishes the coding standards, security requirements, and step-by-step procedures for extending the ConscribePHP framework.
+## Conventions
 
----
+- PSR-4: `App\` → `app/`, `Modules\` → `app/Modules/`, `Tests\` → `tests/`.
+- Classes PascalCase, methods and variables camelCase, global helpers snake_case
+  (`csrf_field()`; `renderTrackingCodes()` and `dateFormat()` are older exceptions).
+- House style: PSR-12 with opening braces on the same line – `composer fix` applies it
+  ([.php-cs-fixer.dist.php](../.php-cs-fixer.dist.php)).
+- Comments explain *why*. Tests use `#[TestDox]` names that read as sentences.
+- Views are `.php` files under `app/Views/` (or a module's `Views/`), lower-case names;
+  components live in `Views/components/`.
 
-## 📏 Coding Standards & Conventions
+## Security rules
 
-ConscribePHP adheres strictly to standardized PSR conventions:
+- **Escape output:** `<?= esc($value) ?>` for every value in a view. JSON for inline scripts
+  goes through `json_encode` with the `JSON_HEX_*` flags.
+- **CSRF:** every form that changes state contains `<?= csrf_field() ?>` and the action calls
+  `check_csrf($request)` (419 on an expired token). AJAX sends the token in `X-CSRF-TOKEN`.
+- **Redirects:** `Response::redirect()` only allows relative or own-host URLs; use
+  `redirectExternal()` for a trusted `https://` target.
+- **SQL:** go through `Repository` or bound parameters; never concatenate input into SQL.
+- **Tracking / third-party scripts:** nothing may load before cookie consent – see
+  `renderTrackingCodes()` and the *Tracking* section of [assets/js/main.js](../assets/js/main.js).
+- **Secrets:** mark password parameters `#[\SensitiveParameter]`; never log credentials.
 
-### Naming Conventions Summary
-- **Namespaces**: PascalCase (e.g. `App\Controllers`, `App\Core`). Defined at the top of PHP files.
-- **Classes**: PascalCase (e.g. `WebController`, `BaseModel`). Filename must exactly match class name.
-- **Methods & Object variables**: camelCase (e.g. `isLinkActive()`, `$pageTitle`).
-- **Global Helper Functions**: snake_case (e.g. `esc()`, `csrf_token()`, `renderTrackingCodes()`). Registered inside [TemplateHelper.php](file:///home/mbrotys/Web/projects/03_osobní/conscribe-php/app/Helpers/TemplateHelper.php).
-- **Session Keys**: snake_case (e.g. `csrf_token`, `form_load_time`).
-- **Views**: lowercase/snake_case (e.g. `home.php`, `contact_form.php`).
-- **Components**: lowercase/snake_case (e.g. `newsletter.php`). Must live under `app/components/`.
+## Add a page
 
----
-
-## 🔒 Security Guidelines (Defense-in-Depth)
-
-All AI agents and developers must maintain the codebase's strong security profile by enforcing these patterns:
-
-### 1. Cross-Site Scripting (XSS) Mitigation
-- Always wrap variable values outputted to views in the escaping helper function `esc()`:
-  ```php
-  <p>Vítejte, <?= esc($username) ?></p>
-  ```
-- **SVGs**: Never output raw user-supplied SVGs directly. Use the custom `svg()` helper which sanitizes elements by removing dangerous tags like `<script>` and attributes like `onload` or `onerror`.
-
-### 2. Cross-Site Request Forgery (CSRF) Mitigation
-- All `POST`, `PUT`, `DELETE` forms **must** contain a CSRF token:
-  ```html
-  <form action="/submit" method="POST">
-      <?= csrf_field() ?>
-      ...
-  </form>
-  ```
-- Verify the token in the corresponding controller action before processing any form inputs:
-  ```php
-  public function submitAction(Request $request): Response {
-      check_csrf(); // Immediately aborts and returns 403 Forbidden if invalid
-      ...
-  }
-  ```
-- For AJAX requests, read the CSRF token from the HTML head meta tag:
-  ```html
-  <meta name="csrf-token" content="<?= csrf_token() ?>">
-  ```
-  Pass this token within the `X-CSRF-TOKEN` header of the fetch/ajax call.
-
-### 3. Form Honeypots & Time Traps
-For public contact and submit forms, prevent automated bot spam:
-- **Honeypot**: Include a hidden input field styled invisible to humans (e.g. named `communication_type`). Reject submissions if this field is filled out.
-- **Time Trap**: Ensure form completion took at least 3 seconds. Check `$current_time - $_SESSION['form_load_time'] >= 3` during verification.
-
----
-
-## 🛠️ Step-by-Step Developer Workflows
-
-Follow these blueprints to extend the application's features:
-
-### Workflow 1: Registering a Route & Controller Action
-
-1. **Create/Open Controller**: Create a controller class inside [app/Controllers/](file:///home/mbrotys/Web/projects/03_osobní/conscribe-php/app/Controllers/) ending in `Controller.php`. Ensure it extends `App\Core\Controller`.
+1. Route in [app/Config/routes/public.php](../app/Config/routes/public.php) (lands in the
+   sitemap) or `routes/admin.php` (does not):
    ```php
-   namespace App\Controllers;
+   $router->get('clanek/{slug}', [ArticleController::class, 'show']);
+   ```
+2. Controller in `app/Controllers/`, extending `App\Core\Http\Controller`. Dependencies come
+   through the constructor (autowired); route params by name:
+   ```php
+   final class ArticleController extends Controller {
+       public function __construct(private ArticleRepository $articles) {}
 
-   use App\Core\Controller;
-   use App\Core\Request;
-   use App\Core\Response;
-
-   class ArticleController extends Controller {
-       public function show(Request $request, string $slug): Response {
-           return $this->render('article/detail', [
-               'pageTitle' => 'Článek: ' . esc($slug),
-               'slug'      => $slug,
+       public function show(string $slug): Response {
+           return $this->render('article/show', [
+               'article' => $this->articles->first(['slug' => $slug]),
            ]);
        }
    }
    ```
-2. **Register Route**: Open [app/Config/routes.php](file:///home/mbrotys/Web/projects/03_osobní/conscribe-php/app/Config/routes.php) and add the path, referencing your controller class and action name:
-   ```php
-   use App\Controllers\ArticleController;
+3. View `app/Views/article/show.php` – variables from the array are in scope; the header and
+   footer layout wrap it automatically. Shared fragments: `<?php component('card', [...]) ?>`.
 
-   $router->get('clanek/{slug}', [ArticleController::class, 'show']);
-   ```
+## Add a repository
 
----
+```php
+final class ArticleRepository extends Repository {
+    protected string $table = 'articles';
+    protected string $model = Article::class;   // extends App\Core\Database\Model; omit for arrays
+}
+```
 
-### Workflow 2: Creating Page Views & Layout Components
+## Add a migration
 
-1. **Create the Page View**: Place your view under `app/Views/` (e.g. `app/Views/article/detail.php`).
-   - The parameters passed to `$this->render()` will be directly available as local variables.
-2. **Render Components**: Load shared components inside views using the `component()` helper, passing dynamic scope arrays:
-   ```php
-   <!-- Inside app/Views/article/detail.php -->
-   <h1><?= esc($pageTitle) ?></h1>
-   <p>Zde se nachází článek o <?= esc($slug) ?></p>
+`php tty make:migration create_articles_table` creates a timestamped file in
+`database/migrations/` with `up(PDO $db)` / `down(PDO $db)`. Run with `php tty migrate`,
+undo with `migrate:rollback`, inspect with `migrate:status`.
 
-   <?php component('newsletter', ['buttonText' => 'Přihlásit k odběru']) ?>
-   ```
-3. **Write Components**: Reusable components reside inside `app/components/` (e.g. `app/components/newsletter.php`):
-   ```php
-   <div class="newsletter-wrap">
-       <button type="submit"><?= esc($buttonText ?? 'Odeslat') ?></button>
-   </div>
-   ```
+## Add a module
 
----
+1. `app/Modules/Blog/Module.php` with `final class Module extends \App\Core\Module\Module`.
+   Override only what the module has: `registerRoutes()`, `commands()`, `boot()`.
+   `migrations/`, `Views/` and `helpers.php` next to `Module.php` are picked up automatically.
+2. Add `'Blog'` to the `modules` list in `app/Config/main.php`.
+3. Views render as `blog::posts/show`; components as `component('blog::teaser')`.
 
-### Workflow 3: Creating Databases Models & Repositories
+## Add a console command
 
-1. **Create Database Model**: Add a PHP model class under [app/Models/](file:///home/mbrotys/Web/projects/03_osobní/conscribe-php/app/Models/) that extends `App\Models\BaseModel`. Set the protected `$table` property:
-   ```php
-   namespace App\Models;
+Extend `App\Core\Console\Command` (set `$name`, `$description`, implement
+`run(Input $input, Output $output): int`) and register it in `Bootstrap::kernel()` (core) or
+the module's `commands()`.
 
-   class Article extends BaseModel {
-       protected $table = 'articles';
+## Finish a task
 
-       public function fetchLatest(): array {
-           // self::$db is the lazy-loaded PDO instance
-           $stmt = self::$db->query("SELECT * FROM {$this->table} ORDER BY created_at DESC LIMIT 5");
-           return $stmt->fetchAll();
-       }
-   }
-   ```
-2. **Implement Repository Layer**: If business logic or caching is required, encapsulate model operations in a Repository:
-   ```php
-   namespace App\Models\Repositories;
-
-   use App\Models\Article;
-
-   class ArticleRepository {
-       private Article $model;
-
-       public function __construct() {
-           $this->model = new Article();
-       }
-
-       public function getLatestArticles(): array {
-           return $this->model->fetchLatest();
-       }
-   }
-   ```
-
----
-
-### Workflow 4: Localization & Translation Setup
-
-1. **Register Slugs**: Open [Language.php](file:///home/mbrotys/Web/projects/03_osobní/conscribe-php/app/Modules/LanguageMutations/Core/Language.php) and add route mappings under `$slugMap` to translate page paths across languages (e.g., `clanky` &rarr; `articles`).
-2. **Update Localized Dictionaries**: Add language string keys to matching keys in language folders:
-   - `app/Modules/LanguageMutations/Languages/cs/home.php`
-   - `app/Modules/LanguageMutations/Languages/en/home.php`
-3. **Use Helpers**:
-   - Translate string key: `<?= __('home.welcome_text') ?>`
-   - Localized URL anchor: `<a href="<?= url('clanky') ?>">...</a>`
-   - Switch active language: `<a href="<?= urlLang('en') ?>">English</a>`
-
----
-
-### Workflow 5: Managing Assets & Caching
-
-1. **Store Assets**: Save CSS under `public/css/`, Javascript under `public/js/`, and SVG icons under `public/img/icons/`.
-2. **Include with Cache-Busting**: Reference files in view layouts using the `asset()` helper function:
-   ```html
-   <link rel="stylesheet" href="<?= asset('css/styles.css') ?>">
-   ```
-   *This automatically queries the modified timestamp (`filemtime`) of the file and appends it as `?v=timestamp` to bust client caches.*
-3. **Inline Icon SVGs**: Inject inline SVGs dynamically:
-   ```php
-   <?= svg('check-icon', ['class' => 'icon-success']) ?>
-   ```
+1. `composer check` (lint + PHPStan + PHPUnit) and `composer fix:check` pass.
+2. CHANGELOG entry under `## Unreleased` (Keep a Changelog sections).
+3. Tick the task in [docs/ROADMAP.md](../docs/ROADMAP.md) and [docs/tasks.html](../docs/tasks.html).
+4. Update README / NAVOD when behaviour or configuration changed.
+5. Commit to `dev`.

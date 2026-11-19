@@ -74,7 +74,7 @@ Framework features in place and covered by tests:
 - [x] Image pipeline: resize, WebP, GD/Imagick, cache, `srcset()`
 - [x] Sitemap generated from the route table
 - [x] Cookie consent banner in the base layout
-- [x] Tracking codes (GA4, Ads, Sklik, FB Pixel) – but see 0.1, they ignore consent
+- [x] Tracking codes (GA4, Ads, Sklik, FB Pixel) – loaded only after cookie consent (0.1)
 
 Findings of the 1.x audit ([archive](archive/audit-1.x.md)), re-checked against current code:
 
@@ -84,9 +84,9 @@ Findings of the 1.x audit ([archive](archive/audit-1.x.md)), re-checked against 
 - [x] Language cookie without flags – module removed; session cookie is hardened
 - [x] Open redirect – `Response::sanitizeRedirectUrl()` allows relative or own-host URLs only
 - [x] `Modules\` namespace autoload, missing-view 404, wrong `asset()` path, `die()` calls, `javascript:` URL, hard-coded sitemap URL, method-unaware router, static DB singleton
-- [ ] PDO connection errors could leak credentials – verify in production mode (task 0.8)
+- [x] PDO connection errors could leak credentials – password kept out of traces, DSN out of the message (0.8, 2026-11-19)
 - [ ] CSP missing by default – becomes default in 3.0.0 (Phase 8)
-- [ ] `@fopen` in `LintCommand.php:83` – low priority (task 0.8)
+- [x] `@fopen` in `LintCommand.php` – replaced by a readability check (0.8, 2026-11-19)
 
 ---
 
@@ -163,7 +163,7 @@ six months on the `2.x` branch.
 `master` nor tagged (latest tag is `2.1.0`). Finish it with the release process above before
 anything else lands.
 
-### 0.1 Tracking scripts must wait for cookie consent (S) – priority
+### 0.1 Tracking scripts must wait for cookie consent (S) – priority ✅ 2026-11-19
 **Why:** `tracking_codes()` prints GA4 / Ads / Sklik / Facebook Pixel as live scripts.
 They run before the visitor answers the cookie banner – a GDPR problem on every client site.
 
@@ -182,7 +182,13 @@ They run before the visitor answers the cookie banner – a GDPR problem on ever
 **Done when:** with no consent, the network tab shows no request to Google, Seznam or Facebook;
 after "Accept all" they load. A unit test checks the rendered markup.
 
-### 0.2 Missing modules must not fail silently (S)
+- [x] Done 2026-11-19, with one change of approach: the helper prints the IDs as inert JSON
+  and `main.js` loads the trackers from the CookieConsent callbacks. CookieConsent 3.1.0
+  re-creates `type="text/plain"` scripts without the CSP nonce, so the `data-category`
+  approach would break once CSP is on. Checked in Chromium: no tracker request before
+  consent or after "Reject all"; all load after "Accept all"; analytics-only loads gtag only.
+
+### 0.2 Missing modules must not fail silently (S) ✅ 2026-11-19
 - [ModuleManager.php](../app/Core/Module/ModuleManager.php): when the `modules` config
   lists a name with no `Module.php` / class, log a warning. (Throwing would break sites that
   boot today, so that waits for 3.0.0.)
@@ -191,16 +197,16 @@ after "Accept all" they load. A unit test checks the rendered markup.
 
 **Done when:** a typo in `modules` is visible in the log; test covers it.
 
-### 0.3 robots.txt – generated version comes in the 2.3.x line
+### 0.3 robots.txt – generated version comes in the 2.3.x line ✅ 2026-11-19
 A generated robots.txt belongs with the routing work – see 3.6. For 2.1.2 only replace the
 `localhost:8080` line in [public/robots.txt](../public/robots.txt) with a commented
 placeholder and a note to set it per site.
 
-### 0.4 Consistent dev ports (S)
+### 0.4 Consistent dev ports (S) ✅ 2026-11-19
 - `docker-compose.yml` publishes 8050, `base_url` and robots say 8080 – pick one (8080)
   and use it everywhere, including README and NAVOD.
 
-### 0.5 Reproducible tooling (S)
+### 0.5 Reproducible tooling (S) ✅ 2026-11-19 (installer pinned to 2.13.2)
 - [composer.json](../composer.json): replace `"*"` in `require-dev` with real constraints
   matching what `composer.lock` has now: `phpunit/phpunit: ^13.3`, `phpstan/phpstan: ^2.2`,
   `friendsofphp/php-cs-fixer: ^3.95`, `symfony/var-dumper: ^8.1`.
@@ -212,21 +218,21 @@ placeholder and a note to set it per site.
 `['sitemap' => false]`.
 
 ### 0.7 Docs cleanup (S)
-- `AGENTS.md` points to `.ai/CONTEXT.md`, which does not exist – create it (short summary +
-  links) or point `AGENTS.md` at `.ai/index.md`.
-- `.ai/structure.md` and `.ai/workflows.md` describe the 1.x layout (`BaseModel`,
-  `app/Core/Router.php`, `ContactSender`, `LanguageMutations`) and use the old path
-  `/home/mbrotys/Web/...`. Rewrite them for 2.x with repo-relative links.
+- [x] `AGENTS.md` pointed to the missing `.ai/CONTEXT.md` – now points at `.ai/index.md` (2026-11-19).
+- [x] `.ai/` docs (index, structure, workflows, tech-stack) rewritten for 2.x with
+  repo-relative links (2026-11-19).
 - [x] Task lists merged into this file; `tasks.html`, the website checklist and the 1.x
   audit moved into `docs/` (2026-11-19).
 - [x] "Dependency-free" wording removed from README and `.ai/` (2026-11-19).
-- Delete the stray file `adsadsadas` (a pasted `git log`). Keep `tty` in the root – it is
-  the shim behind `php tty` and the composer scripts.
-- Commit `.ai/`, `AGENTS.md` and `docs/`.
+- [x] Stray file `adsadsadas` deleted. `tty` stays in the root – it is the shim behind
+  `php tty` and the composer scripts (2026-11-19).
+- [x] `.ai/`, `AGENTS.md` and `docs/` committed (2026-11-19).
 - Reapply or drop `stash@{0}` (old 1.3.3 config/composer edits from before the Gitea pull).
-- Copy `main.example.php` to `main.php` locally and check the site boots with it.
+  Checked 2026-11-19: everything in it is superseded (PHPMailer is already required,
+  `log_email` is a 1.x key) – waiting for the maintainer to confirm the drop.
+- [x] `main.example.php` copied to `main.php` locally; the site boots and serves `/` (2026-11-19).
 
-### 0.8 Small hardening (S)
+### 0.8 Small hardening (S) ✅ 2026-11-19
 - Check that a failed DB connection in production shows the generic error page and logs
   without the DSN/password (`Connection.php`, `ErrorHandler`); add a test.
 - Replace `@fopen` in [LintCommand.php:83](../app/Core/Console/Commands/LintCommand.php#L83)

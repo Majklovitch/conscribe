@@ -1,1 +1,1 @@
-@.ai/CONTEXT.md
+@.ai/index.md

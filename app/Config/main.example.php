@@ -55,8 +55,9 @@ return [
     // listed is off - its routes, commands and migrations included - so a
     // module added to app/Modules/ must be added here too. Remove the key to
     // load everything found.
+    // A name listed here that cannot be loaded is skipped with a warning in
+    // the log, so a typo shows up there.
     'modules' => [
-        'LanguageMutations',
         'Auth',
     ],
     'media' => [
@@ -111,10 +112,6 @@ return [
         'samesite'            => 'Lax',         // 'Lax' | 'Strict' | 'None' ('None' requires secure)
         'regenerate_interval' => 1800,          // seconds between automatic session ID rotations, 0 = off
     ],
-    'contact_form' => [
-        'to_email' => 'test@testserver.com',
-        'from_email' => 'noreply@testserver.com',
-    ],
     'db' => [
         'host'    => 'host',
         'dbname'  => 'database_name',
@@ -122,6 +119,10 @@ return [
         'pass'    => 'password',
         'charset' => 'utf8mb4',
     ],
+    // Tracking IDs. Nothing loads before cookie consent: the IDs are printed as
+    // inert JSON and assets/js/main.js starts each tracker once its category is
+    // accepted - 'analytics' for GA4 / gtag, 'marketing' for Ads, Sklik and the
+    // FB Pixel. Google runs in Consent Mode v2 (denied until accepted).
     'tracking' => [
         'ga4_id'      => null, // Google Analytics 4 Measurement ID (e.g., 'G-XXXXXXXXXX')
         'gtag_id'     => null, // Google Tag / Global Site Tag ID (e.g., 'GTA-XXXXXXXXXX')

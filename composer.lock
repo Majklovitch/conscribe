@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4823e4869a8bf92adfb65990f57ca38d",
+    "content-hash": "13837535aeeffa7d0da5bb557e57bcad",
     "packages": [
         {
             "name": "league/uri",
@@ -2096,7 +2096,8 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-08-22T07:38:16+00:00"
+            "time": "2026-08-22T07:38:16+00:00",
+            "published-time": "2026-08-22T07:38:30+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
@@ -5661,5 +5662,5 @@
         "ext-gd": "*"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }

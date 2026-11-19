@@ -1,3 +1,147 @@
+// --- Tracking ---------------------------------------------------------------
+// renderTrackingCodes() prints the tracker IDs as an inert JSON block; nothing
+// is downloaded until the visitor agrees to the category a tracker belongs to:
+//   analytics - GA4 / Google tag
+//   marketing - Google Ads, Sklik retargeting, Facebook Pixel
+// Google gets Consent Mode v2: everything denied first, then updated to what
+// the visitor accepted. A script that has loaded cannot be unloaded, so
+// withdrawing a category reloads the page without it.
+var Tracking = (function () {
+    var config = null;
+    var loaded = {};
+
+    function readConfig() {
+        if (config === null) {
+            var node = document.getElementById('tracking-config');
+            try {
+                config = node ? JSON.parse(node.textContent) : {};
+            } catch (e) {
+                config = {};
+            }
+        }
+        return config;
+    }
+
+    function accepted(category) {
+        return window.CookieConsent && CookieConsent.acceptedCategory(category);
+    }
+
+    function loadScript(src, onload) {
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = src;
+        if (onload) {
+            script.onload = onload;
+        }
+        document.head.appendChild(script);
+    }
+
+    // Runs at most once per key - consent callbacks can fire repeatedly.
+    function once(key, callback) {
+        if (!loaded[key]) {
+            loaded[key] = true;
+            callback();
+        }
+    }
+
+    function google(cfg, analytics, marketing) {
+        var analyticsIds = cfg.analytics || [];
+        var adsIds = cfg.ads || [];
+        if (!analyticsIds.length && !adsIds.length) {
+            return;
+        }
+
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = window.gtag || function () { window.dataLayer.push(arguments); };
+
+        once('google-default', function () {
+            gtag('consent', 'default', {
+                ad_storage: 'denied',
+                ad_user_data: 'denied',
+                ad_personalization: 'denied',
+                analytics_storage: 'denied'
+            });
+        });
+
+        var ad = marketing ? 'granted' : 'denied';
+        gtag('consent', 'update', {
+            ad_storage: ad,
+            ad_user_data: ad,
+            ad_personalization: ad,
+            analytics_storage: analytics ? 'granted' : 'denied'
+        });
+
+        var ids = (analytics ? analyticsIds : []).concat(marketing ? adsIds : []);
+        if (!ids.length) {
+            return;
+        }
+
+        once('google-js', function () {
+            gtag('js', new Date());
+            loadScript('https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(ids[0]));
+        });
+        ids.forEach(function (id) {
+            once('google-config-' + id, function () {
+                gtag('config', id);
+            });
+        });
+    }
+
+    function sklik(id) {
+        once('sklik', function () {
+            loadScript('https://c.seznam.cz/js/rc.js', function () {
+                if (window.rc && window.rc.retargetingHit) {
+                    window.rc.retargetingHit({ rtgId: id, consent: 1 });
+                }
+            });
+        });
+    }
+
+    function facebook(id) {
+        once('facebook', function () {
+            /* eslint-disable */
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            /* eslint-enable */
+            fbq('init', String(id));
+            fbq('track', 'PageView');
+        });
+    }
+
+    return {
+        apply: function (changedCategories) {
+            var cfg = readConfig();
+            var analytics = accepted('analytics');
+            var marketing = accepted('marketing');
+
+            // Something that already loaded was just switched off.
+            var withdrawn = (changedCategories || []).some(function (category) {
+                return !accepted(category);
+            });
+            if (withdrawn && (loaded['google-js'] || loaded.sklik || loaded.facebook)) {
+                google(cfg, analytics, marketing);
+                window.location.reload();
+                return;
+            }
+
+            google(cfg, analytics, marketing);
+            if (marketing && cfg.sklik) {
+                sklik(cfg.sklik);
+            }
+            if (marketing && cfg.fbPixel) {
+                facebook(cfg.fbPixel);
+            }
+        }
+    };
+})();
+
+// --- Cookie consent ---------------------------------------------------------
 CookieConsent.run({
     guiOptions: {
         consentModal: {
@@ -17,7 +161,23 @@ CookieConsent.run({
         necessary: {
             readOnly: true
         },
-        analytics: {}
+        analytics: {
+            autoClear: {
+                cookies: [{ name: /^_ga/ }, { name: '_gid' }]
+            }
+        },
+        marketing: {
+            autoClear: {
+                cookies: [{ name: /^_gcl/ }, { name: '_fbp' }]
+            }
+        }
+    },
+    // Trackers load only from here - see the "Tracking" section below.
+    onConsent: function () {
+        Tracking.apply();
+    },
+    onChange: function (param) {
+        Tracking.apply(param.changedCategories);
     },
     language: {
         default: "en",
@@ -53,6 +213,11 @@ CookieConsent.run({
                             title: "Analytics",
                             description: "They help us improve the site by measuring traffic.",
                             linkedCategory: "analytics"
+                        },
+                        {
+                            title: "Marketing",
+                            description: "They let advertising services (Google Ads, Sklik, Facebook) measure campaigns and show you relevant ads.",
+                            linkedCategory: "marketing"
                         }
                     ]
                 }
