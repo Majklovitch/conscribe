@@ -4,6 +4,7 @@ namespace App\Core\Database;
 
 use App\Core\Config;
 use PDO;
+use PDOException;
 use RuntimeException;
 use Throwable;
 
@@ -121,9 +122,28 @@ class Connection {
         $charset = $config['charset'] ?? 'utf8mb4';
         $dsn = "mysql:host={$config['host']};dbname={$config['dbname']};charset={$charset}";
 
+        return self::connect($dsn, (string) $config['user'], (string) ($config['pass'] ?? ''));
+    }
+
+    /**
+     * Opens the connection. A failure is rethrown without the DSN or the
+     * password: the message ends up in the log, and the stack trace in Tracy's
+     * saved blue screens, so #[\SensitiveParameter] keeps the password out of
+     * both (PDO's own constructor marks it the same way). Visitors never see
+     * any of it - production renders the generic 500 page.
+     *
+     * @throws RuntimeException
+     */
+    private static function connect(string $dsn, string $user, #[\SensitiveParameter] string $password): PDO {
         $class = self::pdoClass();
 
-        return new $class($dsn, $config['user'], $config['pass'] ?? '', self::OPTIONS);
+        try {
+            return new $class($dsn, $user, $password, self::OPTIONS);
+        } catch (PDOException $e) {
+            // PDO's message names the server's complaint (access denied,
+            // unknown host, missing driver) but never the password.
+            throw new RuntimeException('Could not connect to the database: ' . $e->getMessage(), 0, $e);
+        }
     }
 
     /**

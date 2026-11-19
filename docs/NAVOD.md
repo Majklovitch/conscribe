@@ -77,7 +77,7 @@ docker compose up -d
 docker exec -it conscribe-php composer install
 ```
 
-Web běží na `http://localhost:8050`. Tabulky vytvoříte přes:
+Web běží na `http://localhost:8080`. Tabulky vytvoříte přes:
 
 ```bash
 php tty migrate
@@ -283,7 +283,7 @@ Pravidla: `required`, `nullable`, `sometimes`, `string`, `int`, `numeric`, `bool
 
 Validace mimo controller: `Validator::make($data, $rules)->fails()` / `->errors()` / `->validated()`.
 
-Posílání e-mailu: v projektu je `phpmailer/phpmailer` a v configu `contact_form.to_email` / `from_email` – obalte PHPMailer do vlastní služby (kapitola 10).
+Posílání e-mailu: v projektu je `phpmailer/phpmailer`; adresy si dejte do vlastního klíče configu (např. `contact_form.to_email` / `from_email`, kapitola 18) a PHPMailer obalte do vlastní služby (kapitola 10).
 
 ---
 
@@ -757,7 +757,7 @@ final class Module extends BaseModule {
 }
 ```
 
-Zapnutí: přidejte `'Newsletter'` do `'modules' => [...]` v `app/Config/main.php`. **Když modul v seznamu chybí, je tiše vypnutý** (routy, příkazy i migrace). Namespace `Modules\` je v composer autoloadu, nic dalšího netřeba.
+Zapnutí: přidejte `'Newsletter'` do `'modules' => [...]` v `app/Config/main.php`. **Když modul v seznamu chybí, je vypnutý** (routy, příkazy i migrace). Naopak jméno v seznamu, které nejde načíst (překlep, chybí `Module.php`), se přeskočí s varováním v logu. Namespace `Modules\` je v composer autoloadu, nic dalšího netřeba.
 
 Šablony modulu dejte do jeho `Views/` a volejte je s prefixem – malými písmeny název modulu a `::`: `$this->render('newsletter::form')` vykreslí `app/Modules/Newsletter/Views/form.php`, `component('newsletter::signup')` čte `Views/components/signup.php`. Layout (hlavička, patička) je vždy ten z `app/Views/layout/`. Bez prefixu se hledá v `app/Views/` jako dřív.
 
@@ -823,6 +823,15 @@ composer build
 ```bash
 composer build:watch
 ```
+
+### Měřicí kódy a cookie lišta
+
+ID měřicích kódů patří do `tracking` v configu (`ga4_id`, `gtag_id`, `adwords_id`, `sklik_id`, `fb_pixel_id`); v hlavičce je vypíše `<?= renderTrackingCodes() ?>`. **Před souhlasem se nic nenačte** – helper vypíše jen JSON s ID a skripty spouští sekce *Tracking* v `assets/js/main.js` až po souhlasu s kategorií:
+
+- `analytics` – GA4, Google tag,
+- `marketing` – Google Ads, Sklik, Facebook Pixel.
+
+Google běží v Consent Mode v2 (vše `denied`, po souhlasu `update`). Odvolání kategorie v nastavení stránku znovu načte bez ní. Web s vlastním `main.js` z verze 2.1.1 musí převzít sekci *Tracking*, kategorii `marketing` a callbacky `onConsent` / `onChange`, jinak se měření nespustí vůbec.
 
 Externí knihovna: soubor do `public/js/` nebo `public/css/` a vložte v `app/Views/layout/header.php` / `footer.php` přes `asset('js/knihovna.js')` (cache-busting). Inline `<script>` při zapnuté CSP potřebuje `<?= csp_nonce_attr() ?>`.
 
@@ -949,6 +958,7 @@ php tty migrate
 ```
 
 3. `app/Config/main.php`: `environment => 'production'`, správná `base_url`, DB, případně `trusted_proxies` (za Cloudflare/nginx proxy) a `security.csp`.
+   V `public/robots.txt` odkomentujte řádek `Sitemap:` s adresou webu.
 4. Document root = `public/`, zapisovatelné `storage/logs`, `storage/exceptions`, `public/media/cache`.
 
 ---

@@ -1,8 +1,8 @@
 # Conscribe PHP
 
-Conscribe is a small, dependency-light PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
+Conscribe is a small PHP MVC/MVP framework for building classic server-rendered websites or REST API based apps. It gives you an explicit router, a PHP-template view layer with custom helper, a thin PDO data layer, session and CSRF handling, PSR-3 logging with real error pages and a Tracy debug bar, an on-demand image resizing pipeline, a small autowiring container, and a module system for optional features (dunno if i would maintain it this way) — without an ORM or a compile step.
 
-**Version 2.1.1** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
+**Version 2.1.2** · [Changelog](CHANGELOG.md) · Requires **PHP 8.4+**
 
 May work on 8.2. Older versions I didn't test cause I don't want to.
 
@@ -10,18 +10,8 @@ May work on 8.2. Older versions I didn't test cause I don't want to.
 
 ---
 
-What I want to do in future:
-
-- [ ] Rewrite readme with HUMAN sentences and not the code infrastructure
-- [ ] Rewrite some stuff in code that are unnecessarily complicated and hard to read
-- [ ] Redo the welcome page to be more human and not AI generated
-- [ ] Add new features that will make the framework better (dunno what yet)
-- [ ] Add a 3rd party ORM or make my own (doctrine or mine)
-- [x] Add a dependency injection container (php-di or something else) - done in 2.0.0, a small PSR-11 one of our own
-- [ ] Create new modules??
-- [ ] Refactor Configs to php objects instead of arrays (maybe) - but make them in their own files and not in one big file
-- [ ] Maybe create an .ai folder for better AI integration?
-- [ ] Redo docker compose
+What I want to do in future: see the **[roadmap](docs/ROADMAP.md)** – every planned task, the
+versioning rules and what is already done (clickable checklist: [docs/tasks.html](docs/tasks.html)).
 
 ---
 
@@ -171,7 +161,7 @@ docker compose up -d
 docker exec -it conscribe-php composer install
 ```
 
-The app is then available at `http://localhost:8050`. The project root is bind-mounted into `/var/www/html`, so edits are live without rebuilding.
+The app is then available at `http://localhost:8080`. The project root is bind-mounted into `/var/www/html`, so edits are live without rebuilding.
 
 Use `docker-compose_db.yml` instead when the site should join an existing external Docker network with a database container.
 
@@ -212,7 +202,7 @@ return [
         'environment' => 'development',       // 'development' | 'production'
         'base_url'    => 'http://localhost:8080/',
     ],
-    'modules' => ['LanguageMutations'],        // whitelist; omit the key to enable all found
+    'modules' => ['Auth'],                     // whitelist; omit the key to enable all found
     'media' => [
         'driver'        => 'auto',             // 'auto' | 'imagick' | 'gd'
         'source_root'   => null,               // null = public root
@@ -1373,9 +1363,9 @@ class Module extends BaseModule
 
 The base class supplies sensible defaults, so a module only overrides what it needs. A `helpers.php` next to `Module.php` is `require_once`d automatically, letting the module publish its own global template functions. A `Views/` folder next to it holds the module's templates, rendered as `newsletter::…` (see [Views & Layouts](#views--layouts)).
 
-The `modules` key in the config acts as a whitelist; remove the key to enable everything found. Directories are loaded in sorted order, and anything that is not a `ModuleInterface` implementation is skipped rather than fatal.
+The `modules` key in the config acts as a whitelist; remove the key to enable everything found. Directories are loaded in sorted order, and anything that is not a `ModuleInterface` implementation is skipped rather than fatal. A name in the list that cannot be loaded (a typo, a missing `Module.php`) is skipped with a **warning in the log**, once per name and process; it will throw in 3.0.0.
 
-> `app/Modules/` currently ships empty — the module system is the extension point, and the config's `LanguageMutations` entry is an example of the whitelist syntax, not a bundled module.
+> `app/Modules/` ships the `Auth` module; everything else is up to the site.
 
 ---
 
@@ -1417,9 +1407,31 @@ Fill in only the services you use — anything left `null` or empty renders noth
 </head>
 ```
 
-All Google properties (GA4, Tag, Ads) are combined behind a **single `gtag.js` request** with one `gtag('config', …)` per ID. Sklik and Facebook Pixel emit their standard snippets, the Pixel including its `<noscript>` fallback. IDs are escaped on output, and the Sklik ID is cast to `int` because it lands in JavaScript as a numeric literal.
+**Nothing loads before cookie consent.** `renderTrackingCodes()` prints the IDs as an inert
+`<script type="application/json" id="tracking-config">` block – no script runs and nothing is
+downloaded. The *Tracking* section of `assets/js/main.js` starts each tracker from the
+Cookie Consent v3 callbacks (`onConsent`, `onChange`) once its category is accepted:
 
-The front end also ships **Cookie Consent v3** (`public/js/cookieconsent.umd.js`) with `necessary` and `analytics` categories and Czech copy, so consent handling is wired up next to the tracking tags.
+| Category | Trackers |
+|---|---|
+| `analytics` | GA4 (`ga4_id`), Google tag (`gtag_id`) |
+| `marketing` | Google Ads (`adwords_id`), Sklik retargeting (`sklik_id`), Facebook Pixel (`fb_pixel_id`) |
+
+Google runs in **Consent Mode v2**: `gtag('consent', 'default', …)` denies everything, then
+`'update'` grants what the visitor accepted, and all Google IDs share one `gtag.js` request.
+Withdrawing a category in the preferences reloads the page without it, and the banner's
+`autoClear` removes the `_ga*`, `_gcl*` and `_fbp` cookies. The Pixel's `<noscript>` image is
+gone – it cannot wait for consent. Values are JSON-encoded with the `JSON_HEX_*` flags, and a
+non-numeric Sklik ID is dropped.
+
+Trackers are loaded from `main.js` rather than through Cookie Consent's
+`type="text/plain"` blocks because those are re-created without the CSP nonce and would be
+blocked once a CSP is on. With a CSP, allow the tracker hosts in `script-src`, `img-src` and
+`connect-src` (see the example policy in `main.example.php`).
+
+**Upgrading from 2.1.1:** a site with its own `assets/js/main.js` must copy the *Tracking*
+section, the `marketing` category and the `onConsent` / `onChange` callbacks into it –
+without them no tracker loads at all (safe, but no measurements).
 
 ---
 
@@ -1463,6 +1475,7 @@ Deployment checklist:
 - Confirm `app/Config/main.php` (and `main.prod.php`, if you use one) is not in version control — both are git-ignored by default.
 - If the server keeps its config as `main.prod.php`, set `APP_ENV=production` for cron jobs and `php tty` commands.
 - Review `log.level` and `log.max_files` for the traffic you expect.
+- Uncomment the `Sitemap:` line in `public/robots.txt` with the site's absolute URL.
 
 ---
 

@@ -29,7 +29,7 @@ final class LintCommand extends Command {
         $failed = 0;
 
         foreach ($paths as $path) {
-            foreach ($this->phpFilesIn($root . '/' . $path) as $file) {
+            foreach ($this->phpFilesIn($root . '/' . $path, $output) as $file) {
                 $checked++;
 
                 $result = [];
@@ -51,7 +51,7 @@ final class LintCommand extends Command {
     /**
      * @return iterable<string>
      */
-    private function phpFilesIn(string $directory): iterable {
+    private function phpFilesIn(string $directory, Output $output): iterable {
         if (!is_dir($directory)) {
             return;
         }
@@ -73,14 +73,29 @@ final class LintCommand extends Command {
             // Only extensionless files are sniffed: public/media/cache fills up
             // with generated images, and opening every one of them to look for
             // a shebang would make the check slower the longer the site runs.
-            if ($extension === 'php' || ($extension === '' && $this->isPhpScript($file->getPathname()))) {
+            if ($extension === 'php') {
+                yield $file->getPathname();
+                continue;
+            }
+
+            if ($extension === '' && $file->isReadable() === false) {
+                // Cannot tell whether it is a PHP script - say so instead of
+                // passing over it in silence.
+                $output->warning('Skipped, not readable: ' . $file->getPathname());
+                continue;
+            }
+
+            if ($extension === '' && $this->isPhpScript($file->getPathname())) {
                 yield $file->getPathname();
             }
         }
     }
 
+    /**
+     * Whether a readable, extensionless file starts with a PHP shebang.
+     */
     private function isPhpScript(string $file): bool {
-        $handle = @fopen($file, 'rb');
+        $handle = fopen($file, 'rb');
         if ($handle === false) {
             return false;
         }

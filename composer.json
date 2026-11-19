@@ -64,9 +64,9 @@
         "check": "Everything CI would run, if there were CI: lint, analyse, test."
     },
     "require-dev": {
-        "phpstan/phpstan": "*",
-        "phpunit/phpunit": "*",
-        "friendsofphp/php-cs-fixer": "*",
-        "symfony/var-dumper": "*"
+        "phpstan/phpstan": "^2.2",
+        "phpunit/phpunit": "^13.3",
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "symfony/var-dumper": "^8.1"
     }
 }

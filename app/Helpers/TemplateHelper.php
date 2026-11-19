@@ -200,8 +200,19 @@ function csp_nonce_attr(): string {
 }
 
 /**
- * Renders the tracking codes (GA4, Gtag, AdWords, Sklik, Facebook Pixel)
- * into the header.
+ * Renders the tracking configuration (GA4, Google tag, Google Ads, Sklik,
+ * Facebook Pixel) into the header.
+ *
+ * Nothing here runs or downloads anything: the IDs go out as an inert JSON
+ * block, and assets/js/main.js loads each tracker only after the visitor has
+ * agreed to its cookie category - GA4 and the Google tag under "analytics",
+ * Google Ads, Sklik and the Facebook Pixel under "marketing". Google gets
+ * Consent Mode v2 with everything denied by default. A tracker script that
+ * runs before consent is a GDPR problem on every site using the framework.
+ *
+ * Loading from main.js rather than from <script type="text/plain"> blocks
+ * keeps it working under a nonce-based CSP: CookieConsent re-creates such
+ * blocks without the nonce, so the browser would refuse them.
  */
 function renderTrackingCodes(): string {
     // Without a configuration of its own nothing is rendered - falling back to
@@ -212,74 +223,26 @@ function renderTrackingCodes(): string {
         return '';
     }
 
-    $html = '';
-    $nonce = csp_nonce_attr();
+    $id = static fn (string $key): ?string => is_scalar($tracking[$key] ?? null) && trim((string) $tracking[$key]) !== ''
+        ? trim((string) $tracking[$key])
+        : null;
 
-    // --- Google Tag (gtag.js) Configuration (GA4, Gtag, AdWords) ---
-    $googleIds = [];
-    if (!empty($tracking['ga4_id'])) {
-        $googleIds[] = trim($tracking['ga4_id']);
-    }
-    if (!empty($tracking['gtag_id'])) {
-        $googleIds[] = trim($tracking['gtag_id']);
-    }
-    if (!empty($tracking['adwords_id'])) {
-        $googleIds[] = trim($tracking['adwords_id']);
-    }
+    $config = array_filter([
+        'analytics' => array_values(array_filter([$id('ga4_id'), $id('gtag_id')])),
+        'ads'       => array_values(array_filter([$id('adwords_id')])),
+        // Sklik IDs are numeric; anything else is a typo, not an ID.
+        'sklik'     => ($sklik = $id('sklik_id')) !== null && ctype_digit($sklik) ? (int) $sklik : null,
+        'fbPixel'   => $id('fb_pixel_id'),
+    ], static fn ($value) => $value !== null && $value !== []);
 
-    if (!empty($googleIds)) {
-        $primaryId = $googleIds[0];
-        $html .= "\n    <!-- Global site tag (gtag.js) - Google Analytics / Ads -->\n";
-        $html .= "    <script{$nonce} async src=\"https://www.googletagmanager.com/gtag/js?id=" . esc($primaryId) . "\"></script>\n";
-        $html .= "    <script{$nonce}>\n";
-        $html .= "        window.dataLayer = window.dataLayer || [];\n";
-        $html .= "        function gtag(){dataLayer.push(arguments);}\n";
-        $html .= "        gtag('js', new Date());\n";
-        foreach ($googleIds as $id) {
-            $html .= "        gtag('config', '" . esc($id) . "');\n";
-        }
-        $html .= "    </script>\n";
+    if ($config === []) {
+        return '';
     }
 
-    // --- Sklik Retargeting ---
-    if (!empty($tracking['sklik_id'])) {
-        // The value goes into JS as a numeric literal, hence the hard cast to int.
-        $sklikId = (int) trim((string) $tracking['sklik_id']);
-        $html .= "\n    <!-- Sklik Retargeting -->\n";
-        $html .= "    <script{$nonce} type=\"text/javascript\" src=\"https://c.seznam.cz/js/rc.js\"></script>\n";
-        $html .= "    <script{$nonce} type=\"text/javascript\">\n";
-        $html .= "        /* <![CDATA[ */\n";
-        $html .= '        var seznam_retargeting_id = ' . $sklikId . ";\n";
-        $html .= "        if (window.rc && window.rc.retargeting) {\n";
-        $html .= "            window.rc.retargeting(seznam_retargeting_id);\n";
-        $html .= "        }\n";
-        $html .= "        /* ]]> */\n";
-        $html .= "    </script>\n";
-    }
+    // JSON_HEX_* keeps "</script>" and quotes in a value from closing the block.
+    $json = json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
 
-    // --- Facebook Pixel ---
-    if (!empty($tracking['fb_pixel_id'])) {
-        $fbPixelId = trim($tracking['fb_pixel_id']);
-        $html .= "\n    <!-- Facebook Pixel Code -->\n";
-        $html .= "    <script{$nonce}>\n";
-        $html .= "        !function(f,b,e,v,n,t,s)\n";
-        $html .= "        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?\n";
-        $html .= "        n.callMethod.apply(n,arguments):n.queue.push(arguments)};\n";
-        $html .= "        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';\n";
-        $html .= "        n.queue=[];t=b.createElement(e);t.async=!0;\n";
-        $html .= "        t.src=v;s=b.getElementsByTagName(e)[0];\n";
-        $html .= "        s.parentNode.insertBefore(t,s)}(window, document,'script',\n";
-        $html .= "        'https://connect.facebook.net/en_US/fbevents.js');\n";
-        $html .= "        fbq('init', '" . esc($fbPixelId) . "');\n";
-        $html .= "        fbq('track', 'PageView');\n";
-        $html .= "    </script>\n";
-        $html .= "    <noscript>\n";
-        $html .= '        <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=' . esc($fbPixelId) . "&ev=PageView&noscript=1\"/>\n";
-        $html .= "    </noscript>\n";
-        $html .= "    <!-- End Facebook Pixel Code -->\n";
-    }
-
-    return $html;
+    return "\n    <script type=\"application/json\" id=\"tracking-config\">{$json}</script>\n";
 }
 
 /**

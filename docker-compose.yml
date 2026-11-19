@@ -4,6 +4,6 @@ services:
     build: .
     container_name: conscribe-php
     ports:
-      - "8050:80"
+      - "8080:80"
     volumes:
       - ./:/var/www/html/

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ConscribePHP – Goals &amp; Tasks</title>
+<style>
+  :root { --bg:#fff; --fg:#1d2330; --muted:#667085; --line:#e4e7ec; --card:#f8f9fb; --accent:#3b6fd4; --done:#2e8b57; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171f; --fg:#e6e9f0; --muted:#8b93a7; --line:#2a2f3c; --card:#1b1f2a; --accent:#7aa2f7; --done:#5fc88f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { margin:0 0 4px; font-size:1.6rem; }
+  h2 { font-size:1.15rem; margin:0; }
+  p.sub { margin:0 0 20px; color:var(--muted); }
+  .bar { position:sticky; top:0; background:var(--bg); padding:12px 0; border-bottom:1px solid var(--line); z-index:2; }
+  .track { height:8px; background:var(--line); border-radius:4px; overflow:hidden; }
+  .fill { height:100%; width:100%; background:var(--done); transform:scaleX(0); transform-origin:left; transition:transform .2s; }
+  .bar .row { display:flex; justify-content:space-between; gap:12px; margin-top:6px; color:var(--muted); font-size:.85rem; flex-wrap:wrap; }
+  .bar label { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
+  button { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:6px; padding:2px 10px; cursor:pointer; }
+  section { margin-top:24px; }
+  details { background:var(--card); border:1px solid var(--line); border-radius:8px; margin-top:10px; }
+  summary { cursor:pointer; padding:10px 14px; display:flex; justify-content:space-between; gap:12px; align-items:center; }
+  summary .count { color:var(--muted); font-size:.85rem; white-space:nowrap; }
+  ul { list-style:none; margin:0; padding:0 14px 10px; }
+  li { padding:4px 0; }
+  li label { display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+  li input { margin-top:4px; accent-color:var(--done); }
+  li.done span.t { color:var(--muted); }
+  li.done span.t::before { content:"✓ "; color:var(--done); }
+  .sub-h { padding:8px 14px 0; color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; }
+  .note { color:var(--muted); font-size:.85rem; }
+  .goal { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:8px 12px; margin-top:8px; }
+  .goal b { display:block; color:var(--accent); }
+  code { background:var(--line); padding:0 4px; border-radius:3px; font-size:.9em; }
+  .hide-done li.done { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ConscribePHP – Framework Goals &amp; Tasks</h1>
+  <p class="sub">Clickable copy of <a href="ROADMAP.md">docs/ROADMAP.md</a> (the source of truth – details, acceptance criteria and versioning rules are there). State verified 2026-11-19 on <code>dev</code> @ <code>c19b0b3</code>, version 2.1.1. Ticks are saved in this browser.</p>
+
+  <div class="bar">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <div class="row">
+      <span id="total">0 / 0 done</span>
+      <span>
+        <label><input type="checkbox" id="hideDone"> hide done</label>
+        <button id="reset">reset ticks</button>
+      </span>
+    </div>
+  </div>
+
+  <section>
+    <h2>Project goals</h2>
+    <div class="goal"><b>Lean, not dependency-free</b>Keep the core small and readable; add a focused Composer package when a feature needs one. PHP 8.4+ with Monolog, Tracy, PHPMailer, scssphp, minify, psr/container.</div>
+    <div class="goal"><b>Front-controller routing</b>Clean split between <code>public/index.php</code> and application logic via the Router.</div>
+    <div class="goal"><b>Secure by default</b>CSRF validation, XSS escaping (<code>esc()</code>), secure cookies and security headers on every view and endpoint.</div>
+    <div class="goal"><b>Modular architecture</b>Optional features live in self-contained modules under <code>app/Modules/</code> (currently Auth).</div>
+  </section>
+
+  <section>
+    <h2>Versioning</h2>
+    <div class="goal"><b>&lt;major&gt;.&lt;minor&gt;.&lt;fixes/additions&gt;</b>major = breaking changes · minor = a new feature line (one roadmap phase) · third number = each fix or backward-compatible addition inside the line. Removals are deprecated first and only happen in a major.</div>
+  </section>
+
+  <section id="lists"></section>
+</main>
+
+<script>
+/* Edit this block to track work. done:true = finished by default;
+   ticks made in the browser override it (stored in localStorage). */
+const G = (title, note, items) => ({ title, note, items });
+const SECTIONS = [
+  G("Current state (2026-11-19)", "PHPUnit 334 tests OK · PHPStan level 5 clean (--memory-limit=1G) · no CI yet.", [
+    ["Dependencies installed, PHP 8.4+", 1],
+    ["Test suite passes (334 tests, 601 assertions)", 1],
+    ["PHPStan level 5 runs clean", 1, "needs --memory-limit=1G"],
+    ["Front controller, router (all methods, groups, typed params, 405)", 1],
+    ["Middleware pipeline and CORS", 1],
+    ["PSR-11 autowiring container", 1],
+    ["Immutable Request, Response factories, safe redirects", 1],
+    ["Sessions on write only, flash, old input, CSRF", 1],
+    ["Security headers; CSP with nonces (off by default)", 1],
+    ["Validator", 1],
+    ["Views, layouts, components, module views", 1],
+    ["DB: lazy connection, Repository, Model, query log", 1],
+    ["Migrations and make:migration", 1],
+    ["Console php tty (build, lint, migrate, help, list)", 1],
+    ["Module system; Auth module (login, tokens, throttle)", 1],
+    ["Config per environment, overlay, time zone", 1],
+    ["Logging, error pages, Tracy", 1],
+    ["Asset pipeline (SCSS, minify, watch)", 1],
+    ["Image pipeline (resize, WebP, GD/Imagick, srcset)", 1],
+    ["Sitemap from the route table", 1],
+    ["Cookie consent banner", 1],
+  ]),
+  G("1.x audit findings (docs/archive/audit-1.x.md)", "Re-checked against current code.", [
+    ["Reply-To header injection", 1, "mail code removed; comes back safely in 5.2"],
+    ["SSRF / unrestricted extensions in MediaService", 1, "download code removed"],
+    ["Unquoted table names", 1, "Repository quotes identifiers"],
+    ["Language cookie without flags", 1, "module removed"],
+    ["Open redirect", 1, "sanitizeRedirectUrl()"],
+    ["Autoload, 404 view, asset(), die(), javascript: URL, sitemap URL, router methods, DB singleton", 1],
+    ["PDO connection errors could leak credentials", 1, "2026-11-19"],
+    ["CSP off by default", 0, "default in 3.0.0"],
+    ["@fopen in LintCommand.php:83", 1, "2026-11-19"],
+  ]),
+  G("Phase 0 – fixes and housekeeping (2.1.1 → 2.1.2)", "", [
+    ["Release 2.1.1: merge dev into master, tag 2.1.1", 1, "2026-11-19"],
+    ["0.1 Tracking scripts wait for cookie consent + Consent Mode v2", 1, "2026-11-19"],
+    ["0.2 Warn when a listed module is missing; clean main.example.php", 1, "2026-11-19"],
+    ["0.3 robots.txt: replace localhost line with a placeholder", 1, "2026-11-19"],
+    ["0.4 One dev port everywhere (8080)", 1, "2026-11-19"],
+    ["0.5 Pin require-dev versions and the Docker extension installer", 1, "2026-11-19"],
+    ["0.6 Test page stays (optional rename to /showcase, no sitemap)", 0],
+    ["0.7 Task lists merged into docs/ROADMAP.md, files moved to docs/", 1, "2026-11-19"],
+    ["0.7 Dependency-free wording removed from README and .ai/", 1, "2026-11-19"],
+    ["0.7 Rewrite .ai/structure.md + workflows.md for 2.x; AGENTS.md → .ai/index.md", 1, "2026-11-19"],
+    ["0.7 Delete stray file adsadsadas (keep tty – it is the console shim)", 1, "2026-11-19"],
+    ["0.7 Commit .ai/, AGENTS.md, docs/", 1, "2026-11-19"],
+    ["0.7 Reapply or drop stash@{0} (pre-gitea-pull)", 1, "2026-11-19 – dropped"],
+    ["0.7 Copy main.example.php to main.php and check the site boots", 1, "2026-11-19"],
+    ["0.8 DB connect errors leak nothing in production; replace @fopen", 1, "2026-11-19"],
+  ]),
+  G("Phase 1 – quality gate (unversioned)", "", [
+    ["1.0 php tty release <version> helper", 0],
+    ["1.1 CI: composer validate, lint, cs-fixer, PHPStan, PHPUnit (PHP 8.4 + 8.5)", 0],
+    ["1.2 PHPStan level 6, then 7–8", 0],
+  ]),
+  G("Phase 2 – ready for apps built on Conscribe (2.2.x)", "The CMS is a separate project on top of Conscribe. Today each site has its own copy of app/Core.", [
+    ["Fold shopette core changes back (Schema, AlertHandler, Request/Response …)", 0],
+    ["2.2.0 Core as a Composer package; this repo becomes the app skeleton", 0],
+    ["2.2.1 Modules discovered from Composer packages; vendor:publish", 0],
+    ["2.2.2 Extension points: router fallback, replaceable core services, slug() (later items add events, casts, admin hooks, Redirects::add())", 0],
+    ["2.2.3 create-project skeleton, docs/building-apps.md, migration guide", 0],
+    ["shopette and supportgroup run on the package (no app/Core copy)", 0],
+    ["CMS project started in its own repository (public side after 2.2.x, editing after 2.8.x)", 0],
+  ]),
+  G("Phase 3 – routing and HTTP (2.3.x)", "", [
+    ["2.3.0 Named routes and route() helper", 0, "biggest missing piece"],
+    ["2.3.1 /up health endpoint (port shopette HealthCheck) and maintenance mode", 0],
+    ["2.3.2 Generated robots.txt; compression; opt-in HTTPS redirect; nginx example", 0],
+    ["2.3.3 UploadedFile, upload service, file validation rules (file() deprecated)", 0],
+    ["2.3.4 Download/stream responses, ETag / Last-Modified / 304", 0],
+    ["2.3.5 RateLimiter (port from shopette) + RateLimit middleware", 0],
+  ]),
+  G("Phase 4 – templates and front end (2.4.x)", "Latte first, so mail, contact and admin templates are Latte from the start.", [
+    ["2.4.0 Latte: engine by extension (.latte, fallback .php), ViewPaths loader, helpers as functions, CSP nonce, Tracy panel, latte:lint, demo views converted", 0],
+    ["2.4.1 SEO helpers: meta, canonical, OG, Twitter, JSON-LD, breadcrumbs", 0],
+    ["2.4.2 picture() helper: srcset, lazy loading, AVIF", 0],
+    ["2.4.3 SCSS: dark mode, skip link, reduced motion, focus styles", 0],
+  ]),
+  G("Phase 5 – services (2.5.x)", "", [
+    ["2.5.0 Cache layer (PSR-16, file/APCu)", 0],
+    ["2.5.1 Mailer + mail queue (port shopette Services/Mail; Latte templates)", 0],
+    ["2.5.2 Contact-form module", 0],
+    ["2.5.3 Event dispatcher", 0],
+    ["2.5.4 Scheduler (port shopette ScheduleRunCommand + cron_runs)", 0],
+    ["2.5.5 Settings in the database (port shopette SettingsRepository → Config::overlay)", 0],
+  ]),
+  G("Phase 6 – i18n (2.6.x)", "", [
+    ["2.6.0 Translation module: trans(), Latte {_...}, URL prefix, hreflang", 0],
+  ]),
+  G("Phase 7 – data layer and admin (2.7.x, 2.8.x)", "Decided: SQL-first, own query builder, no ORM (Doctrine too heavy; Nette Explorer clashes with typed Models and shopette's store scope).", [
+    ["ORM decision", 1, "2026-11-19 – see ROADMAP Phase 7"],
+    ["2.7.0 Query builder: whereIn, whereExists, like+ESCAPE, when(), scopes, groupBy, forUpdate, upsert, subqueries", 0, "done when shopette adminSearch + a SalesReport query fit"],
+    ["2.7.1 Relation loading (hasMany/belongsTo/belongsToMany, batched IN) + Model casts", 0],
+    ["2.7.2 Paginator object + view helper (array form deprecated)", 0],
+    ["2.7.3 Seeders and factories", 0],
+    ["2.8.0 Admin shell (port non-shop parts of shopette Admin)", 0],
+    ["2.8.1 Password reset, TOTP 2FA, audit log (port from shopette)", 0],
+    ["2.8.2 Redirect manager (301 table, CSV import)", 0],
+  ]),
+  G("Ongoing – developer experience", "", [
+    ["Generators: make:controller, make:module, make:middleware, make:repository, make:command", 0],
+    ["tty routes, tty serve, tty media:clear", 0],
+    ["Docker: dev compose (DB, Mailpit), production image", 0],
+    ["README rewrite in plain language; English version of NAVOD", 0],
+    ["Simplify the largest classes (Router, Session, Request, Bootstrap)", 0],
+    ["New welcome page", 0],
+    ["Backups: backup:run / list / verify (port from shopette)", 0],
+    ["config:check and key:generate (port from shopette)", 0],
+  ]),
+  G("Phase 8 – 3.0.0 (breaking)", "", [
+    ["3.0.0-beta.1 tested on a real client site", 0],
+    ["Remove 2.x deprecations; paginate() returns Paginator", 0],
+    ["Missing module throws; HTTPS redirect and CSP on by default", 0],
+    ["Namespace App\\Core → Conscribe (class_alias shims)", 0],
+    ["Typed config objects; review minimum PHP", 0],
+    ["Latte default for new views and generators (.php views keep working)", 0],
+    ["UPGRADING.md and tty upgrade:check", 0],
+  ]),
+];
+
+const KEY = "conscribe-tasks-v9";
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} };
+
+const root = document.getElementById("lists");
+const boxes = [];
+
+SECTIONS.forEach((s, si) => {
+  const d = document.createElement("details");
+  d.open = s.items.some(it => !(Array.isArray(it) && it[1]));
+  const sum = document.createElement("summary");
+  sum.innerHTML = '<strong></strong><span class="count"></span>';
+  sum.firstChild.textContent = s.title;
+  d.appendChild(sum);
+  if (s.note) { const n = document.createElement("div"); n.className = "sub-h note"; n.textContent = s.note; d.appendChild(n); }
+  const ul = document.createElement("ul");
+  const mine = [];
+  s.items.forEach((it, ii) => {
+    const [text, dflt, hint] = Array.isArray(it) ? it : [it, 0];
+    const id = si + ":" + ii;
+    const li = document.createElement("li");
+    const lab = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = id in saved ? saved[id] : !!dflt;
+    const t = document.createElement("span"); t.className = "t"; t.textContent = text;
+    if (hint) { const h = document.createElement("small"); h.className = "note"; h.textContent = " – " + hint; t.appendChild(h); }
+    cb.addEventListener("change", () => { saved[id] = cb.checked; persist(); refresh(); });
+    lab.append(cb, t); li.appendChild(lab); ul.appendChild(li);
+    mine.push({ cb, li });
+    boxes.push({ id, cb, dflt: !!dflt });
+  });
+  d.appendChild(ul);
+  root.appendChild(d);
+  s._ui = { mine, count: sum.querySelector(".count") };
+});
+
+function refresh() {
+  let done = 0;
+  SECTIONS.forEach(s => {
+    const n = s._ui.mine.filter(m => m.cb.checked).length;
+    s._ui.count.textContent = n + " / " + s._ui.mine.length;
+    s._ui.mine.forEach(m => m.li.classList.toggle("done", m.cb.checked));
+    done += n;
+  });
+  const total = boxes.length;
+  document.getElementById("total").textContent = done + " / " + total + " done";
+  document.getElementById("fill").style.transform = "scaleX(" + (total ? done / total : 0) + ")";
+}
+
+document.getElementById("hideDone").addEventListener("change", e => root.classList.toggle("hide-done", e.target.checked));
+document.getElementById("reset").addEventListener("click", () => {
+  saved = {}; persist(); boxes.forEach(b => b.cb.checked = b.dflt); refresh();
+});
+refresh();
+</script>
+</body>
+</html>

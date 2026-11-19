@@ -1,8 +1,54 @@
 # Changelog
 
 All notable changes to Conscribe PHP. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
+`<major>.<minor>.<fixes/additions>`: a major breaks existing sites, a minor
+starts a new feature line, the third number ships fixes and smaller
+backward-compatible additions - see *Versioning rules* in
+[docs/ROADMAP.md](docs/ROADMAP.md).
+
+## 2.1.2 - 2026-11-19
+
+### Security
+
+- **Tracking codes wait for cookie consent.** `renderTrackingCodes()` used to
+  print GA4, Google Ads, Sklik and the Facebook Pixel as live scripts that ran
+  before the visitor answered the cookie banner. It now prints only an inert
+  `<script type="application/json" id="tracking-config">` block, and
+  `assets/js/main.js` loads each tracker from the Cookie Consent callbacks once
+  its category is accepted: `analytics` (GA4, Google tag) or the new
+  `marketing` category (Google Ads, Sklik, Facebook Pixel). Google runs in
+  Consent Mode v2, denied by default. The Pixel's `<noscript>` image is gone,
+  since it cannot wait for consent. **What to check:** a site with its own
+  `assets/js/main.js` must copy in the *Tracking* section, the `marketing`
+  category and the `onConsent` / `onChange` callbacks. Without them no tracker
+  loads at all, which is safe but records nothing.
+- **A failed database connection no longer carries the password in a trace.**
+  `Connection` opens PDO in a method whose password parameter is marked
+  `#[\SensitiveParameter]`, and rethrows a failure as `RuntimeException`
+  ("Could not connect to the database: …") without the DSN. Logs and saved
+  Tracy dumps stay free of credentials; visitors see the generic 500 page as
+  before.
+
+### Changed
+
+- **A module listed in `modules` that cannot be loaded is logged.** A typo, a
+  directory without `Module.php` or a `Module.php` without the expected class
+  now writes one warning per name to the log instead of being skipped silently.
+  It still does not throw (that waits for 3.0.0).
+- `php tty lint` reports an unreadable extensionless file instead of skipping
+  it silently (no more `@fopen`).
+- `main.example.php`: `LanguageMutations` removed from `modules` (the module no
+  longer exists) and the unused `contact_form` key removed.
+- `public/robots.txt`: the `localhost` sitemap line is now a commented
+  placeholder to set per site.
+- Docker publishes the dev site on port **8080**, matching `base_url`, the
+  README and NAVOD (was 8050). The Dockerfile pins `install-php-extensions`
+  to release 2.13.2.
+- Dev dependencies have real constraints (`phpunit ^13.3`, `phpstan ^2.2`,
+  `php-cs-fixer ^3.95`, `var-dumper ^8.1`) instead of `*`.
+- Version numbers are `<major>.<minor>.<fixes/additions>` as described in
+  `docs/ROADMAP.md`, rather than strict Semantic Versioning.
 
 ## 2.1.1 - 2026-11-10
 
