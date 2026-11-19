@@ -159,9 +159,8 @@ six months on the `2.x` branch.
 
 ## Phase 0 – Fixes and housekeeping (2.1.2)
 
-**Release 2.1.1 first:** it is committed on `dev` (`c19b0b3`) but neither merged into
-`master` nor tagged (latest tag is `2.1.0`). Finish it with the release process above before
-anything else lands.
+- [x] **2.1.1 released** 2026-11-19: `c19b0b3` merged into `master` and tagged `2.1.1`.
+- [x] **2.1.2 released** 2026-11-19 with everything in this phase except the optional 0.6.
 
 ### 0.1 Tracking scripts must wait for cookie consent (S) – priority ✅ 2026-11-19
 **Why:** `tracking_codes()` prints GA4 / Ads / Sklik / Facebook Pixel as live scripts.
@@ -227,9 +226,8 @@ placeholder and a note to set it per site.
 - [x] Stray file `adsadsadas` deleted. `tty` stays in the root – it is the shim behind
   `php tty` and the composer scripts (2026-11-19).
 - [x] `.ai/`, `AGENTS.md` and `docs/` committed (2026-11-19).
-- Reapply or drop `stash@{0}` (old 1.3.3 config/composer edits from before the Gitea pull).
-  Checked 2026-11-19: everything in it is superseded (PHPMailer is already required,
-  `log_email` is a 1.x key) – waiting for the maintainer to confirm the drop.
+- [x] `stash@{0}` dropped – everything in it was superseded (PHPMailer already required,
+  `log_email` a 1.x key); it was commit `8b810f2` (2026-11-19).
 - [x] `main.example.php` copied to `main.php` locally; the site boots and serves `/` (2026-11-19).
 
 ### 0.8 Small hardening (S) ✅ 2026-11-19

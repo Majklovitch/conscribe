@@ -48,7 +48,7 @@ final class Bootstrap {
      * about whether this was 1.3.9 or 1.4.0. README and CHANGELOG repeat it
      * for readers; VersionTest fails the suite when either disagrees.
      */
-    public const VERSION = '2.1.1';
+    public const VERSION = '2.1.2';
 
     private bool $isDevelopment;
     private ErrorPage $errorPage;

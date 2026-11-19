@@ -7,7 +7,7 @@ starts a new feature line, the third number ships fixes and smaller
 backward-compatible additions - see *Versioning rules* in
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Unreleased
+## 2.1.2 - 2026-11-19
 
 ### Security
 
